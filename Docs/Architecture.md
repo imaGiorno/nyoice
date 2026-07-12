@@ -22,7 +22,7 @@ Sprint 1では、タイトル画面とゲーム画面を起点に、今後のゲ
 
 ### TitleScene
 
-`TitleSceneController`がタイトルと開始案内を描画し、画面クリックまたはタップで`GameScene`へ遷移する。Sprint 1初期基盤では外部アセットや追加UIパッケージへ依存しない。
+Unity 6同梱の標準uGUI（Canvas、Text、透明Button）でタイトルと開始案内を表示する。Buttonから`TitleSceneController`を呼び出し、画面クリックまたはタップで`GameScene`へ遷移する。外部アセットやUnity外の追加Packageには依存しない。
 
 ### GameScene
 
