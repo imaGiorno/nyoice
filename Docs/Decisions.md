@@ -22,3 +22,20 @@
 - 決定: SetupスクリプトがCanvas、Text、透明Button、EventSystemを生成し、`TitleSceneController`へ開始イベントを接続する。
 - 理由: Unity 6標準構成だけでクリック・タップ入力を提供し、IMGUI Moduleへの依存を避けるため。
 - 見直し条件: 本番向けレイアウト、フォント、アニメーション、アクセシビリティ対応を実装するとき。
+
+## D-004: GameStageはEditor生成する配置基盤とする
+
+- 日付: 2026-07-12
+- 状態: 採用
+- 決定: `Nyoice/Setup Game Stage`がUnity標準PrimitiveでGameStageを生成する。
+- 理由: 外部素材なしで、NPC、便器制御、待機列、経路ロジックが参照できる安定したTransform構成を用意するため。
+- 境界: EditorコードはScene構築だけを担当し、RuntimeコードにはNyoiceラインの意味を示すマーカーのみを置く。
+- 安全策: GameSceneに`GameStage`が存在する場合は生成せず警告する。
+
+## D-005: 待機列はNyoiceラインの入口側へ置く
+
+- 日付: 2026-07-12
+- 状態: 採用
+- 決定: Nyoiceラインを`x = 6.0`、ライン直前の`NyoiceApproachPoint`を`x = 6.2`、`Queue01`を`x = 6.5`に置き、Queue番号順に入口方向へ並べる。
+- 理由: 待機中に目的地確定ラインを越えず、先頭NPCだけが便器選択を受け付けながらライン直前へ進めるようにするため。
+- Spawn: `SpawnPoint`は`x = 10.1`とし、`Queue08`よりさらに入口側へ置く。
