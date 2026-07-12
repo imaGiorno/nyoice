@@ -1,5 +1,7 @@
 using System.IO;
 using Nyoice.Core;
+using Nyoice.Managers;
+using Nyoice.NPC;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -14,6 +16,7 @@ namespace Nyoice.Editor
     {
         private const string MenuPath = "Nyoice/Setup Game Stage";
         private const string GameScenePath = "Assets/_Project/Scenes/GameScene.unity";
+        private const string NpcPrefabPath = "Assets/_Project/Prefabs/NPC.prefab";
         private const string GameStageName = "GameStage";
         private const int UrinalCount = 8;
 
@@ -22,6 +25,7 @@ namespace Nyoice.Editor
         private const float UrinalY = 3.25f;
         private const float StageBottomY = -4.75f;
         private const float NyoiceLineX = 6f;
+        private const float DecisionPointX = 6.35f;
         private const float NyoiceApproachX = 6.2f;
         private const float QueueStartX = 6.5f;
         private const float QueueSpacing = 0.45f;
@@ -60,14 +64,17 @@ namespace Nyoice.Editor
 
             CreateUrinals(urinals);
             CreatePartitions(partitions);
-            CreateEntrance(entrance);
-            CreateQueue(queue);
+            Transform spawnPoint = CreateEntrance(entrance);
+            QueueSlot[] queueSlots = CreateQueue(queue, out Transform decisionPoint);
             CreateNyoiceLine(nyoiceLine);
             CreateExit(exit);
             CreateWaypoints(waypoints);
+            NPCController npcPrefab = CreateNpcPrefab();
+            CreateGameSystems(queueSlots, decisionPoint, spawnPoint, npcPrefab);
             EnsureSceneCamera();
             EnsureSceneLight();
 
+            AssetDatabase.SaveAssets();
             EditorSceneManager.MarkSceneDirty(gameScene);
             EditorSceneManager.SaveScene(gameScene);
             Selection.activeGameObject = gameStage;
@@ -128,7 +135,7 @@ namespace Nyoice.Editor
             }
         }
 
-        private static void CreateEntrance(Transform parent)
+        private static Transform CreateEntrance(Transform parent)
         {
             CreateCube(
                 "EntranceMarker",
@@ -137,22 +144,44 @@ namespace Nyoice.Editor
                 new Vector3(0.25f, 2f, 0.25f),
                 new Color(0.25f, 0.65f, 0.35f));
 
-            CreatePoint("SpawnPoint", parent, new Vector3(SpawnPointX, QueueY, 0f), Color.green);
+            GameObject spawnPoint = CreatePoint(
+                "SpawnPoint",
+                parent,
+                new Vector3(SpawnPointX, QueueY, 0f),
+                Color.green);
+            return spawnPoint.transform;
         }
 
-        private static void CreateQueue(Transform parent)
+        private static QueueSlot[] CreateQueue(Transform parent, out Transform decisionPoint)
         {
+            GameObject decision = CreatePoint(
+                "DecisionPoint",
+                parent,
+                new Vector3(DecisionPointX, QueueY, 0f),
+                new Color(0.75f, 0.25f, 1f));
+            decisionPoint = decision.transform;
+
             CreatePoint(
                 "NyoiceApproachPoint",
                 parent,
                 new Vector3(NyoiceApproachX, QueueY, 0f),
                 new Color(1f, 0.35f, 0.15f));
 
+            var slots = new QueueSlot[UrinalCount];
             for (int index = 0; index < UrinalCount; index++)
             {
                 float x = QueueStartX + (index * QueueSpacing);
-                CreatePoint($"Queue{index + 1:00}", parent, new Vector3(x, QueueY, 0f), new Color(1f, 0.75f, 0.15f));
+                GameObject slotObject = CreatePoint(
+                    $"Queue{index + 1:00}",
+                    parent,
+                    new Vector3(x, QueueY, 0f),
+                    new Color(1f, 0.75f, 0.15f));
+                QueueSlot slot = slotObject.AddComponent<QueueSlot>();
+                slot.Initialize(index + 1);
+                slots[index] = slot;
             }
+
+            return slots;
         }
 
         private static void CreateNyoiceLine(Transform parent)
@@ -197,6 +226,47 @@ namespace Nyoice.Editor
             }
         }
 
+        private static NPCController CreateNpcPrefab()
+        {
+            GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(NpcPrefabPath);
+            if (existingPrefab != null)
+            {
+                return existingPrefab.GetComponent<NPCController>();
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(NpcPrefabPath));
+
+            var npcRoot = new GameObject("NPC", typeof(NPCMovement), typeof(NPCController));
+            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            visual.name = "Visual";
+            visual.transform.SetParent(npcRoot.transform, false);
+            visual.GetComponent<Renderer>().material.color = new Color(0.35f, 0.7f, 0.95f);
+
+            PrefabUtility.SaveAsPrefabAsset(npcRoot, NpcPrefabPath);
+            Object.DestroyImmediate(npcRoot);
+
+            GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(NpcPrefabPath);
+            return prefabAsset.GetComponent<NPCController>();
+        }
+
+        private static void CreateGameSystems(
+            QueueSlot[] queueSlots,
+            Transform decisionPoint,
+            Transform spawnPoint,
+            NPCController npcPrefab)
+        {
+            var gameSystems = new GameObject("GameSystems");
+
+            var queueManagerObject = new GameObject("QueueManager", typeof(QueueManager));
+            queueManagerObject.transform.SetParent(gameSystems.transform, false);
+            QueueManager queueManager = queueManagerObject.GetComponent<QueueManager>();
+            queueManager.Configure(queueSlots, decisionPoint);
+
+            var spawnerObject = new GameObject("NPCSpawner", typeof(NPCSpawner));
+            spawnerObject.transform.SetParent(gameSystems.transform, false);
+            spawnerObject.GetComponent<NPCSpawner>().Configure(npcPrefab, spawnPoint, queueManager);
+        }
+
         private static Transform CreateGroup(string name, Transform parent)
         {
             var group = new GameObject(name);
@@ -204,9 +274,9 @@ namespace Nyoice.Editor
             return group.transform;
         }
 
-        private static void CreatePoint(string name, Transform parent, Vector3 position, Color color)
+        private static GameObject CreatePoint(string name, Transform parent, Vector3 position, Color color)
         {
-            CreateCube(name, parent, position, new Vector3(0.18f, 0.18f, 0.18f), color);
+            return CreateCube(name, parent, position, new Vector3(0.18f, 0.18f, 0.18f), color);
         }
 
         private static GameObject CreateCube(

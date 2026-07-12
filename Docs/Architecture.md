@@ -39,12 +39,26 @@ Unityメニューの`Nyoice > Setup Sprint 1`がSceneを生成し、Build Settin
 - `Urinals`: `Urinal01`から`Urinal08`までの8基と番号表示
 - `Partitions`: 各便器右側のついたて。`Partition08`はNyoiceラインの開始位置を示す
 - `Entrance`: 右側入口と、待機列最後尾より入口側に置くNPC生成位置`SpawnPoint`
-- `Queue`: ラインに最も近い`Queue01`から入口方向へ並ぶ`Queue08`と、ライン直前の`NyoiceApproachPoint`
+- `Queue`: ラインに最も近い`Queue01`から入口方向へ並ぶ`Queue08`、`DecisionPoint`、ライン直前の`NyoiceApproachPoint`
 - `NyoiceLine`: NPCの便器目的地を確定する境界
 - `Exit`: 左側出口と`ExitPoint`
 - `Waypoints`: 各便器の`MovePoint`、`UsePoint`、`ExitStartPoint`
 
-待機中のNPCはNyoiceラインの入口側（右側）に留まる。先頭NPCは`Queue01`から`NyoiceApproachPoint`へ移動し、便器選択を受け付けながらライン直前で待つ。ラインを右から左へ越えた時点で便器の目的地を確定し、以後は変更しない。
+待機中のNPCはNyoiceラインの入口側（右側）に留まる。Sprint 3では先頭NPCが`Queue01`から`DecisionPoint`へ移動して停止し、便器選択待ちになる。後続Sprintでは`DecisionPoint`から`NyoiceApproachPoint`へ進み、ラインを右から左へ越えた時点で便器の目的地を確定する。
+
+空間上の進行順は次のとおりとする。
+
+`Queue01 → DecisionPoint → NyoiceApproachPoint → NyoiceLine → MovePoint → UsePoint → ExitStartPoint`
+
+## NPC待機システム
+
+- `NPCSpawner`: `SpawnPoint`で3秒ごとにNPCを生成する
+- `QueueManager`: 8個の表示QueueSlot、先頭への前進、DecisionPoint占有、内部待機リストを管理する
+- `QueueSlot`: Queue番号と現在のNPC占有状態を保持する
+- `NPCController`: Queue移動中、Queue待機中、DecisionPoint待機中の状態を調停する
+- `NPCMovement`: `Vector3.MoveTowards`で速度2.5の直線移動を行う
+
+`Setup Game Stage`は`Assets/_Project/Prefabs/NPC.prefab`を生成する。PrefabはRuntimeロジックを持つルートと、後で差し替え可能な`Visual`子オブジェクトを分離する。Scene上には`GameSystems/NPCSpawner`と`GameSystems/QueueManager`を生成する。
 
 ## 依存方向
 
