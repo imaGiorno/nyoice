@@ -10,6 +10,8 @@ namespace Nyoice.Managers
     [DisallowMultipleComponent]
     public sealed class QueueManager : MonoBehaviour
     {
+        private const int MaxVisibleNpcCount = 8;
+
         [SerializeField]
         private QueueSlot[] queueSlots;
 
@@ -32,8 +34,9 @@ namespace Nyoice.Managers
             npc.Initialize(this);
 
             QueueSlot entrySlot = FindLastAvailableSlot();
-            if (entrySlot == null)
+            if (entrySlot == null || GetVisibleNpcCount() >= MaxVisibleNpcCount)
             {
+                npc.WaitInternally();
                 _internalWaitingList.Add(npc);
                 return;
             }
@@ -97,6 +100,11 @@ namespace Nyoice.Managers
         {
             while (_internalWaitingList.Count > 0)
             {
+                if (GetVisibleNpcCount() >= MaxVisibleNpcCount)
+                {
+                    return;
+                }
+
                 QueueSlot entrySlot = FindLastAvailableSlot();
                 if (entrySlot == null)
                 {
@@ -122,11 +130,26 @@ namespace Nyoice.Managers
             return null;
         }
 
+        private int GetVisibleNpcCount()
+        {
+            int visibleCount = _decisionPointOccupant != null ? 1 : 0;
+
+            foreach (QueueSlot slot in queueSlots)
+            {
+                if (slot.IsOccupied)
+                {
+                    visibleCount++;
+                }
+            }
+
+            return visibleCount;
+        }
+
         private static void AssignToSlot(NPCController npc, QueueSlot slot)
         {
             if (slot.TryAssign(npc))
             {
-                npc.MoveToQueueSlot(slot);
+                npc.EnterVisibleQueue(slot);
             }
         }
     }

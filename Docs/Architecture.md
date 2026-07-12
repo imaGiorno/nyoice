@@ -53,12 +53,14 @@ Unityメニューの`Nyoice > Setup Sprint 1`がSceneを生成し、Build Settin
 ## NPC待機システム
 
 - `NPCSpawner`: `SpawnPoint`で3秒ごとにNPCを生成する
-- `QueueManager`: 8個の表示QueueSlot、先頭への前進、DecisionPoint占有、内部待機リストを管理する
+- `QueueManager`: 8個のQueueSlot、画面上の最大8人、先頭への前進、DecisionPoint占有、内部待機リストを管理する
 - `QueueSlot`: Queue番号と現在のNPC占有状態を保持する
 - `NPCController`: Queue移動中、Queue待機中、DecisionPoint待機中の状態を調停する
 - `NPCMovement`: `Vector3.MoveTowards`で速度2.5の直線移動を行う
 
 `Setup Game Stage`は`Assets/_Project/Prefabs/NPC.prefab`を生成する。PrefabはRuntimeロジックを持つルートと、後で差し替え可能な`Visual`子オブジェクトを分離する。Scene上には`GameSystems/NPCSpawner`と`GameSystems/QueueManager`を生成する。
+
+画面上に表示するNPCは、QueueSlotとDecisionPointを合わせて最大8人とする。9人目以降も3秒ごとに生成するが、`NPCController`が自身と全子孫のRendererおよびColliderを無効化して内部待機する。表示枠とQueueSlotに空きができると、内部待機リストの先頭NPCがRendererとColliderを再有効化し、SpawnPointから割り当て先QueueSlotへ移動する。
 
 ## 依存方向
 

@@ -49,3 +49,12 @@
 - 先頭: `Queue01`到着後は`DecisionPoint`へ移動し、便器選択待ちとして停止する。
 - 移動: NavMeshやTween Packageを使わず、`Vector3.MoveTowards`で移動する。
 - Prefab: Runtimeコンポーネントを持つルートと見た目の`Visual`子を分け、後から素材だけを差し替え可能にする。
+
+## D-007: 内部待機NPCは生成済みのまま非表示にする
+
+- 日付: 2026-07-12
+- 状態: 採用
+- 決定: 画面上のNPCをDecisionPointを含め最大8人とし、9人目以降はRendererとColliderを無効化して内部待機リストへ保持する。
+- 表示責務: 全子孫のRendererとColliderの切り替えは`NPCController`だけが担当する。
+- 復帰: 表示枠とQueueSlotが空いた時点で、内部待機NPCを表示状態へ戻してSpawnPointからQueueへ移動させる。
+- 非採用: Sprint 3 MVPではObject Poolを導入せず、生成済みNPCを再利用する。
