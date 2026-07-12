@@ -38,11 +38,13 @@ Unityメニューの`Nyoice > Setup Sprint 1`がSceneを生成し、Build Settin
 
 - `Urinals`: `Urinal01`から`Urinal08`までの8基と番号表示
 - `Partitions`: 各便器右側のついたて。`Partition08`はNyoiceラインの開始位置を示す
-- `Entrance`: 右側入口とNPC生成位置`SpawnPoint`
-- `Queue`: 画面表示対象となる`Queue01`から`Queue08`
+- `Entrance`: 右側入口と、待機列最後尾より入口側に置くNPC生成位置`SpawnPoint`
+- `Queue`: ラインに最も近い`Queue01`から入口方向へ並ぶ`Queue08`と、ライン直前の`NyoiceApproachPoint`
 - `NyoiceLine`: NPCの便器目的地を確定する境界
 - `Exit`: 左側出口と`ExitPoint`
 - `Waypoints`: 各便器の`MovePoint`、`UsePoint`、`ExitStartPoint`
+
+待機中のNPCはNyoiceラインの入口側（右側）に留まる。先頭NPCは`Queue01`から`NyoiceApproachPoint`へ移動し、便器選択を受け付けながらライン直前で待つ。ラインを右から左へ越えた時点で便器の目的地を確定し、以後は変更しない。
 
 ## 依存方向
 

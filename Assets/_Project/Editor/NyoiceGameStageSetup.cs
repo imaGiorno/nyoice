@@ -21,6 +21,12 @@ namespace Nyoice.Editor
         private const float UrinalSpacing = 1.5f;
         private const float UrinalY = 3.25f;
         private const float StageBottomY = -4.75f;
+        private const float NyoiceLineX = 6f;
+        private const float NyoiceApproachX = 6.2f;
+        private const float QueueStartX = 6.5f;
+        private const float QueueSpacing = 0.45f;
+        private const float QueueY = -3.75f;
+        private const float SpawnPointX = 10.1f;
 
         [MenuItem(MenuPath)]
         public static void SetupGameStage()
@@ -127,32 +133,37 @@ namespace Nyoice.Editor
             CreateCube(
                 "EntranceMarker",
                 parent,
-                new Vector3(6.5f, -3.75f, 0f),
+                new Vector3(10.4f, QueueY, 0f),
                 new Vector3(0.25f, 2f, 0.25f),
                 new Color(0.25f, 0.65f, 0.35f));
 
-            CreatePoint("SpawnPoint", parent, new Vector3(5.75f, -3.75f, 0f), Color.green);
+            CreatePoint("SpawnPoint", parent, new Vector3(SpawnPointX, QueueY, 0f), Color.green);
         }
 
         private static void CreateQueue(Transform parent)
         {
+            CreatePoint(
+                "NyoiceApproachPoint",
+                parent,
+                new Vector3(NyoiceApproachX, QueueY, 0f),
+                new Color(1f, 0.35f, 0.15f));
+
             for (int index = 0; index < UrinalCount; index++)
             {
-                float y = -3.75f + (index * 0.8f);
-                CreatePoint($"Queue{index + 1:00}", parent, new Vector3(5.75f, y, 0f), new Color(1f, 0.75f, 0.15f));
+                float x = QueueStartX + (index * QueueSpacing);
+                CreatePoint($"Queue{index + 1:00}", parent, new Vector3(x, QueueY, 0f), new Color(1f, 0.75f, 0.15f));
             }
         }
 
         private static void CreateNyoiceLine(Transform parent)
         {
-            float x = GetUrinalX(UrinalCount - 1) + (UrinalSpacing * 0.5f);
             float height = UrinalY - StageBottomY;
             float centerY = StageBottomY + (height * 0.5f);
 
             GameObject line = CreateCube(
                 "Line",
                 parent,
-                new Vector3(x, centerY, 0f),
+                new Vector3(NyoiceLineX, centerY, 0f),
                 new Vector3(0.08f, height, 0.08f),
                 new Color(0.9f, 0.2f, 0.2f));
 
@@ -232,7 +243,7 @@ namespace Nyoice.Editor
 
             Camera camera = cameraObject.GetComponent<Camera>();
             camera.orthographic = true;
-            camera.orthographicSize = 5.5f;
+            camera.orthographicSize = 6f;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = new Color(0.07f, 0.09f, 0.11f);
         }
