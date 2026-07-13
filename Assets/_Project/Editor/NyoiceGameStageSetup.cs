@@ -32,6 +32,9 @@ namespace Nyoice.Editor
         private const float QueueY = -3.75f;
         private const float SpawnPointX = 10.1f;
 
+        private static readonly Vector3 NpcVisualScale = new Vector3(0.12f, 0.45f, 0.3f);
+        private static readonly Vector3 NpcVisualPosition = new Vector3(0f, 0.45f, 0f);
+
         [MenuItem(MenuPath)]
         public static void SetupGameStage()
         {
@@ -47,9 +50,11 @@ namespace Nyoice.Editor
             }
 
             Scene gameScene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
+            NPCController npcPrefab = CreateNpcPrefab();
             if (GameObject.Find(GameStageName) != null)
             {
-                Warn("GameStageは既に存在するため、生成を中止しました。");
+                AssetDatabase.SaveAssets();
+                Warn("NPC.prefabを最新化しました。GameStageは既に存在するため、ステージ生成を中止しました。");
                 return;
             }
 
@@ -69,7 +74,6 @@ namespace Nyoice.Editor
             CreateNyoiceLine(nyoiceLine);
             CreateExit(exit);
             CreateWaypoints(waypoints);
-            NPCController npcPrefab = CreateNpcPrefab();
             CreateGameSystems(queueSlots, decisionPoint, spawnPoint, npcPrefab);
             EnsureSceneCamera();
             EnsureSceneLight();
@@ -232,22 +236,58 @@ namespace Nyoice.Editor
             GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(NpcPrefabPath);
             if (existingPrefab != null)
             {
-                return existingPrefab.GetComponent<NPCController>();
+                GameObject prefabContents = PrefabUtility.LoadPrefabContents(NpcPrefabPath);
+                try
+                {
+                    ConfigureNpcPrefab(prefabContents);
+                    PrefabUtility.SaveAsPrefabAsset(prefabContents, NpcPrefabPath);
+                }
+                finally
+                {
+                    PrefabUtility.UnloadPrefabContents(prefabContents);
+                }
+
+                GameObject updatedPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(NpcPrefabPath);
+                return updatedPrefab.GetComponent<NPCController>();
             }
 
             Directory.CreateDirectory(Path.GetDirectoryName(NpcPrefabPath));
 
-            var npcRoot = new GameObject("NPC", typeof(NPCMovement), typeof(NPCController));
-            GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-            visual.name = "Visual";
-            visual.transform.SetParent(npcRoot.transform, false);
-            visual.GetComponent<Renderer>().material.color = new Color(0.35f, 0.7f, 0.95f);
+            var npcRoot = new GameObject("NPC");
+            ConfigureNpcPrefab(npcRoot);
 
             PrefabUtility.SaveAsPrefabAsset(npcRoot, NpcPrefabPath);
             Object.DestroyImmediate(npcRoot);
 
             GameObject prefabAsset = AssetDatabase.LoadAssetAtPath<GameObject>(NpcPrefabPath);
             return prefabAsset.GetComponent<NPCController>();
+        }
+
+        private static void ConfigureNpcPrefab(GameObject npcRoot)
+        {
+            if (npcRoot.GetComponent<NPCMovement>() == null)
+            {
+                npcRoot.AddComponent<NPCMovement>();
+            }
+
+            if (npcRoot.GetComponent<NPCController>() == null)
+            {
+                npcRoot.AddComponent<NPCController>();
+            }
+
+            Transform visualTransform = npcRoot.transform.Find("Visual");
+            if (visualTransform == null)
+            {
+                GameObject visual = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+                visual.name = "Visual";
+                visual.transform.SetParent(npcRoot.transform, false);
+                visual.GetComponent<Renderer>().material.color = new Color(0.35f, 0.7f, 0.95f);
+                visualTransform = visual.transform;
+            }
+
+            visualTransform.localPosition = NpcVisualPosition;
+            visualTransform.localRotation = Quaternion.identity;
+            visualTransform.localScale = NpcVisualScale;
         }
 
         private static void CreateGameSystems(
