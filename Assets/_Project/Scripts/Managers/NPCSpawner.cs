@@ -34,6 +34,14 @@ namespace Nyoice.Managers
 
         private IEnumerator Start()
         {
+            ResolveRuntimeReferences();
+            if (npcPrefab == null || spawnPoint == null || queueManager == null || !queueManager.EnsureRuntimeReferences())
+            {
+                Debug.LogError("NPCSpawner could not initialize its prefab, SpawnPoint, or QueueManager.", this);
+                enabled = false;
+                yield break;
+            }
+
             var wait = new WaitForSeconds(spawnIntervalSeconds);
 
             while (true)
@@ -55,6 +63,20 @@ namespace Nyoice.Managers
             NPCController npc = Instantiate(npcPrefab, spawnPoint.position, Quaternion.identity);
             npc.name = $"NPC_{Time.frameCount}";
             queueManager.Enqueue(npc);
+        }
+
+        private void ResolveRuntimeReferences()
+        {
+            if (queueManager == null)
+            {
+                queueManager = FindFirstObjectByType<QueueManager>();
+            }
+
+            if (spawnPoint == null)
+            {
+                GameObject resolvedSpawnPoint = GameObject.Find("GameStage/Entrance/SpawnPoint");
+                spawnPoint = resolvedSpawnPoint != null ? resolvedSpawnPoint.transform : null;
+            }
         }
     }
 }

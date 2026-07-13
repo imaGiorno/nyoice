@@ -178,6 +178,7 @@ namespace Nyoice.Editor
                     new Color(1f, 0.75f, 0.15f));
                 QueueSlot slot = slotObject.AddComponent<QueueSlot>();
                 slot.Initialize(index + 1);
+                EditorUtility.SetDirty(slot);
                 slots[index] = slot;
             }
 
@@ -261,10 +262,13 @@ namespace Nyoice.Editor
             queueManagerObject.transform.SetParent(gameSystems.transform, false);
             QueueManager queueManager = queueManagerObject.GetComponent<QueueManager>();
             queueManager.Configure(queueSlots, decisionPoint);
+            EditorUtility.SetDirty(queueManager);
 
             var spawnerObject = new GameObject("NPCSpawner", typeof(NPCSpawner));
             spawnerObject.transform.SetParent(gameSystems.transform, false);
-            spawnerObject.GetComponent<NPCSpawner>().Configure(npcPrefab, spawnPoint, queueManager);
+            NPCSpawner spawner = spawnerObject.GetComponent<NPCSpawner>();
+            spawner.Configure(npcPrefab, spawnPoint, queueManager);
+            EditorUtility.SetDirty(spawner);
         }
 
         private static Transform CreateGroup(string name, Transform parent)

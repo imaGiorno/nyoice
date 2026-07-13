@@ -58,3 +58,12 @@
 - 表示責務: 全子孫のRendererとColliderの切り替えは`NPCController`だけが担当する。
 - 復帰: 表示枠とQueueSlotが空いた時点で、内部待機NPCを表示状態へ戻してSpawnPointからQueueへ移動させる。
 - 非採用: Sprint 3 MVPではObject Poolを導入せず、生成済みNPCを再利用する。
+
+## D-008: Queue参照はSetup保存とRuntime検証を併用する
+
+- 日付: 2026-07-13
+- 状態: 採用
+- 決定: SetupがQueueSlot配列を明示的にDirty保存し、QueueManagerがAwake時に8枠とDecisionPointを検証する。
+- 復旧: 参照が欠損していれば`GameStage/Queue`以下の固定名からQueue01〜Queue08を順番に再取得する。
+- 失敗時: Queue構成を復旧できない場合はNPCSpawnerを停止し、NPCをSpawnPointへ生成し続けない。
+- 理由: Sceneのシリアライズ参照欠損を、全NPCが内部待機扱いになる挙動へ暗黙変換しないため。

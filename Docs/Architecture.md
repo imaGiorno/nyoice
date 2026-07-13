@@ -62,6 +62,8 @@ Unityメニューの`Nyoice > Setup Sprint 1`がSceneを生成し、Build Settin
 
 画面上に表示するNPCは、QueueSlotとDecisionPointを合わせて最大8人とする。9人目以降も3秒ごとに生成するが、`NPCController`が自身と全子孫のRendererおよびColliderを無効化して内部待機する。表示枠とQueueSlotに空きができると、内部待機リストの先頭NPCがRendererとColliderを再有効化し、SpawnPointから割り当て先QueueSlotへ移動する。
 
+QueueManagerはSetup時に保存されたQueueSlot配列を使用する。Scene参照が未保存・欠損している場合に備え、Awake時に`GameStage/Queue/Queue01`〜`Queue08`と`DecisionPoint`を名前順で再取得する。NPCSpawnerもQueueManagerとSpawnPointを実行時に検証し、初期化できない場合は生成を停止して明示的なエラーを出す。
+
 ## 依存方向
 
 UI、NPC、ToiletはCoreで定義するゲーム状態を参照し、ManagersがScene上の進行を調停する方針とする。Sprint 1では将来の抽象化を先回りせず、必要になった責務だけを分離する。

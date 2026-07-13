@@ -24,6 +24,7 @@ namespace Nyoice.NPC
             _targetPosition = targetPosition;
             _onArrived = onArrived;
             IsMoving = true;
+            enabled = true;
         }
 
         private void Update()

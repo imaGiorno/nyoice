@@ -30,6 +30,10 @@ namespace Nyoice.NPC
         public void Initialize(QueueManager queueManager)
         {
             _queueManager = queueManager;
+            if (_movement == null)
+            {
+                _movement = GetComponent<NPCMovement>();
+            }
         }
 
         public void WaitInternally()

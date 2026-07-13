@@ -20,8 +20,14 @@ namespace Nyoice.Managers
 
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
         private NPCController _decisionPointOccupant;
+        private bool _hasLoggedInitializationError;
 
         public IReadOnlyList<NPCController> InternalWaitingList => _internalWaitingList;
+
+        private void Awake()
+        {
+            EnsureRuntimeReferences();
+        }
 
         public void Configure(QueueSlot[] slots, Transform decisionPointTransform)
         {
@@ -32,6 +38,13 @@ namespace Nyoice.Managers
         public void Enqueue(NPCController npc)
         {
             npc.Initialize(this);
+
+            if (!EnsureRuntimeReferences())
+            {
+                npc.WaitInternally();
+                _internalWaitingList.Add(npc);
+                return;
+            }
 
             QueueSlot entrySlot = FindLastAvailableSlot();
             if (entrySlot == null || GetVisibleNpcCount() >= MaxVisibleNpcCount)
@@ -44,68 +57,33 @@ namespace Nyoice.Managers
             AssignToSlot(npc, entrySlot);
         }
 
-        public void NotifyQueueSlotReached(NPCController npc)
+        public bool EnsureRuntimeReferences()
         {
-            AdvanceQueue();
-        }
-
-        public void NotifyDecisionPointReached(NPCController npc)
-        {
-            _decisionPointOccupant = npc;
-            AdvanceQueue();
-        }
-
-        private void AdvanceQueue()
-        {
-            MoveFrontNpcToDecisionPoint();
-
-            for (int index = 1; index < queueSlots.Length; index++)
+            if (HasValidQueueReferences())
             {
-                QueueSlot current = queueSlots[index];
-                QueueSlot next = queueSlots[index - 1];
-                NPCController npc = current.Occupant;
+                return true;
+            }
 
-                if (npc == null || !npc.IsWaitingAtSlot || next.IsOccupied)
+            GameObject queueRoot = GameObject.Find("GameStage/Queue");
+            if (queueRoot == null)
+            {
+                LogInitializationError("QueueManager could not find GameStage/Queue.");
+                return false;
+            }
+
+            var resolvedSlots = new QueueSlot[MaxVisibleNpcCount];
+            for (int index = 0; index < resolvedSlots.Length; index++)
+            {
+                string slotName = $"Queue{index + 1:00}";
+                Transform slotTransform = queueRoot.transform.Find(slotName);
+                if (slotTransform == null)
                 {
-                    continue;
+                    LogInitializationError($"QueueManager could not find {slotName}.");
+                    return false;
                 }
 
-                current.Clear(npc);
-                AssignToSlot(npc, next);
-            }
-
-            AdmitInternallyWaitingNpcs();
-        }
-
-        private void MoveFrontNpcToDecisionPoint()
-        {
-            if (_decisionPointOccupant != null || decisionPoint == null || queueSlots.Length == 0)
-            {
-                return;
-            }
-
-            QueueSlot front = queueSlots[0];
-            NPCController npc = front.Occupant;
-            if (npc == null || !npc.IsWaitingAtSlot)
-            {
-                return;
-            }
-
-            _decisionPointOccupant = npc;
-            front.Clear(npc);
-            npc.MoveToDecisionPoint(decisionPoint.position);
-        }
-
-        private void AdmitInternallyWaitingNpcs()
-        {
-            while (_internalWaitingList.Count > 0)
-            {
-                if (GetVisibleNpcCount() >= MaxVisibleNpcCount)
-                {
-                    return;
-                }
-
-                QueueSlot entrySlot = FindLastAvailableSlot();
+                QueueSlot slot = slotTransform.GetComponent<QueueSlot>();
+                if (slot == n…660 tokens truncated…indLastAvailableSlot();
                 if (entrySlot == null)
                 {
                     return;
@@ -128,6 +106,36 @@ namespace Nyoice.Managers
             }
 
             return null;
+        }
+
+        private bool HasValidQueueReferences()
+        {
+            if (queueSlots == null || queueSlots.Length != MaxVisibleNpcCount || decisionPoint == null)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < queueSlots.Length; index++)
+            {
+                QueueSlot slot = queueSlots[index];
+                if (slot == null || slot.QueueNumber != index + 1)
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private void LogInitializationError(string message)
+        {
+            if (_hasLoggedInitializationError)
+            {
+                return;
+            }
+
+            _hasLoggedInitializationError = true;
+            Debug.LogError(message, this);
         }
 
         private int GetVisibleNpcCount()
