@@ -83,7 +83,97 @@ namespace Nyoice.Managers
                 }
 
                 QueueSlot slot = slotTransform.GetComponent<QueueSlot>();
-                if (slot == n…660 tokens truncated…indLastAvailableSlot();
+                if (slot == null)
+                {
+                    slot = slotTransform.gameObject.AddComponent<QueueSlot>();
+                }
+
+                slot.Initialize(index + 1);
+                resolvedSlots[index] = slot;
+            }
+
+            Transform resolvedDecisionPoint = queueRoot.transform.Find("DecisionPoint");
+            if (resolvedDecisionPoint == null)
+            {
+                LogInitializationError("QueueManager could not find DecisionPoint.");
+                return false;
+            }
+
+            queueSlots = resolvedSlots;
+            decisionPoint = resolvedDecisionPoint;
+
+            if (!HasValidQueueReferences())
+            {
+                LogInitializationError("QueueManager failed to resolve its QueueSlots or DecisionPoint.");
+                return false;
+            }
+
+            _hasLoggedInitializationError = false;
+            return true;
+        }
+
+        public void NotifyQueueSlotReached(NPCController npc)
+        {
+            AdvanceQueue();
+        }
+
+        public void NotifyDecisionPointReached(NPCController npc)
+        {
+            _decisionPointOccupant = npc;
+            AdvanceQueue();
+        }
+
+        private void AdvanceQueue()
+        {
+            MoveFrontNpcToDecisionPoint();
+
+            for (int index = 1; index < queueSlots.Length; index++)
+            {
+                QueueSlot current = queueSlots[index];
+                QueueSlot next = queueSlots[index - 1];
+                NPCController npc = current.Occupant;
+
+                if (npc == null || !npc.IsWaitingAtSlot || next.IsOccupied)
+                {
+                    continue;
+                }
+
+                current.Clear(npc);
+                AssignToSlot(npc, next);
+            }
+
+            AdmitInternallyWaitingNpcs();
+        }
+
+        private void MoveFrontNpcToDecisionPoint()
+        {
+            if (_decisionPointOccupant != null || decisionPoint == null || queueSlots.Length == 0)
+            {
+                return;
+            }
+
+            QueueSlot front = queueSlots[0];
+            NPCController npc = front.Occupant;
+            if (npc == null || !npc.IsWaitingAtSlot)
+            {
+                return;
+            }
+
+            _decisionPointOccupant = npc;
+            front.Clear(npc);
+            npc.MoveToDecisionPoint(decisionPoint.position);
+        }
+
+        private void AdmitInternallyWaitingNpcs()
+        {
+            while (_internalWaitingList.Count > 0)
+            {
+                if (GetVisibleNpcCount() >= MaxVisibleNpcCount)
+                {
+                    return;
+                }
+
+                QueueSlot entrySlot = FindLastAvailableSlot();
                 if (entrySlot == null)
                 {
                     return;
