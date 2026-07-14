@@ -21,6 +21,9 @@ namespace Nyoice.Toilet
         private Transform usePoint;
 
         [SerializeField]
+        private Transform exitStartPoint;
+
+        [SerializeField]
         private GameObject highlight;
 
         [SerializeField]
@@ -32,6 +35,7 @@ namespace Nyoice.Toilet
         public UrinalState State => state;
         public Transform MovePoint => movePoint;
         public Transform UsePoint => usePoint;
+        public Transform ExitStartPoint => exitStartPoint;
         public NPCController ReservedBy { get; private set; }
         public bool IsAvailable => state == UrinalState.Available;
         public bool IsOccupied => state == UrinalState.Occupied;
@@ -47,9 +51,27 @@ namespace Nyoice.Toilet
             GameObject highlightObject,
             Renderer renderer)
         {
+            Configure(
+                number,
+                movePointTransform,
+                usePointTransform,
+                null,
+                highlightObject,
+                renderer);
+        }
+
+        public void Configure(
+            int number,
+            Transform movePointTransform,
+            Transform usePointTransform,
+            Transform exitStartPointTransform,
+            GameObject highlightObject,
+            Renderer renderer)
+        {
             urinalNumber = number;
             movePoint = movePointTransform;
             usePoint = usePointTransform;
+            exitStartPoint = exitStartPointTransform;
             highlight = highlightObject;
             bodyRenderer = renderer;
 
@@ -88,16 +110,17 @@ namespace Nyoice.Toilet
             return true;
         }
 
-        public void Release(NPCController npc)
+        public bool Release(NPCController npc)
         {
-            if (ReservedBy != npc)
+            if (npc == null || ReservedBy != npc)
             {
-                return;
+                return false;
             }
 
             ReservedBy = null;
             state = UrinalState.Available;
             ApplyPresentation();
+            return true;
         }
 
         public void SetSelected(bool selected)

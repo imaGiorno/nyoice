@@ -62,7 +62,7 @@ namespace Nyoice.Editor
             ConfigureStageAndSystems(gameStage.transform, npcPrefab);
             SaveSceneAndAssets(gameScene);
             Selection.activeGameObject = gameStage;
-            ShowInfo("GameStage and Sprint 4 systems are ready.");
+            ShowInfo("GameStage and Sprint 5-2 systems are ready.");
         }
 
         private static GameObject CreateGameStage()
@@ -92,11 +92,13 @@ namespace Nyoice.Editor
             Transform entranceRoot = GetOrCreateGroup("Entrance", gameStage);
             Transform queueRoot = GetOrCreateGroup("Queue", gameStage);
             Transform lineRoot = GetOrCreateGroup("NyoiceLine", gameStage);
+            Transform exitRoot = GetOrCreateGroup("Exit", gameStage);
             Transform waypointRoot = GetOrCreateGroup("Waypoints", gameStage);
 
             EnsureQueueLayout(queueRoot);
             Transform spawnPoint = EnsureEntranceLayout(entranceRoot);
             Transform crossingTarget = EnsureNyoiceLine(lineRoot);
+            Transform exitPoint = EnsureExitLayout(exitRoot);
             UrinalController[] urinals = EnsureUrinalControllers(urinalRoot, waypointRoot);
             QueueSlot[] queueSlots = EnsureQueueSlots(queueRoot);
             Transform decisionPoint = queueRoot.Find("DecisionPoint");
@@ -107,6 +109,7 @@ namespace Nyoice.Editor
                 decisionPoint,
                 approachPoint,
                 crossingTarget,
+                exitPoint,
                 spawnPoint,
                 urinals,
                 npcPrefab);
@@ -226,6 +229,27 @@ namespace Nyoice.Editor
                 new Vector3(0.25f, 2f, 0.25f),
                 new Color(0.3f, 0.55f, 0.9f));
             CreatePoint("ExitPoint", parent, new Vector3(-5.75f, -3.75f, 0f), Color.cyan);
+        }
+
+        private static Transform EnsureExitLayout(Transform parent)
+        {
+            Transform exitMarker = parent.Find("ExitMarker");
+            if (exitMarker == null)
+            {
+                exitMarker = CreateCube(
+                    "ExitMarker",
+                    parent,
+                    new Vector3(-6.5f, -3.75f, 0f),
+                    new Vector3(0.25f, 2f, 0.25f),
+                    new Color(0.3f, 0.55f, 0.9f)).transform;
+            }
+
+            exitMarker.position = new Vector3(-6.5f, -3.75f, 0f);
+            return SetOrCreatePoint(
+                parent,
+                "ExitPoint",
+                new Vector3(-5.75f, -3.75f, 0f),
+                Color.cyan);
         }
 
         private static void CreateWaypoints(Transform parent)
@@ -399,7 +423,7 @@ namespace Nyoice.Editor
                     "UsePoint",
                     new Vector3(GetUrinalX(index), 2.45f, 0f),
                     Color.magenta);
-                SetOrCreatePoint(
+                Transform exitStartPoint = SetOrCreatePoint(
                     waypointGroup,
                     "ExitStartPoint",
                     new Vector3(GetUrinalX(index) - 0.45f, 1.35f, 0f),
@@ -416,6 +440,7 @@ namespace Nyoice.Editor
                     index + 1,
                     movePoint,
                     usePoint,
+                    exitStartPoint,
                     highlight,
                     body.GetComponent<Renderer>());
                 EditorUtility.SetDirty(controller);
@@ -513,6 +538,7 @@ namespace Nyoice.Editor
             Transform decisionPoint,
             Transform approachPoint,
             Transform crossingTarget,
+            Transform exitPoint,
             Transform spawnPoint,
             UrinalController[] urinals,
             NPCController npcPrefab)
@@ -541,6 +567,7 @@ namespace Nyoice.Editor
             urinalManager.Configure(urinals, Camera.main, audioSource);
             queueManager.Configure(queueSlots, decisionPoint);
             queueManager.ConfigureUrinalFlow(urinalManager, ticketManager, approachPoint, crossingTarget);
+            queueManager.ConfigureExitFlow(exitPoint);
             spawner.Configure(npcPrefab, spawnPoint, queueManager);
 
             EditorUtility.SetDirty(queueManager);

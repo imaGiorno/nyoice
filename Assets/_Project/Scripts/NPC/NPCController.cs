@@ -22,15 +22,22 @@ namespace Nyoice.NPC
         private QueueManager _queueManager;
         private UrinalManager _urinalManager;
         private UrinalTicketManager _ticketManager;
+        private Transform _exitPoint;
         private Renderer[] _renderers;
         private Collider[] _colliders;
         private Vector3 _lineCrossingTarget;
         private Coroutine _selectionWaitRoutine;
         private Coroutine _urinationRoutine;
         private bool _urinationStarted;
+        private bool _leavingStarted;
+        private bool _exitStartReached;
+        private bool _movingToExitPoint;
+        private bool _finished;
+        private bool _destroyScheduled;
 
         public QueueSlot CurrentSlot { get; private set; }
         public UrinalController TargetUrinal { get; private set; }
+        public UrinalController CurrentUrinal => TargetUrinal;
         public NPCState State { get; private set; } = NPCState.Queue;
         public bool IsWaitingAtSlot { get; private set; }
         public bool IsWaitingForDecision => State == NPCState.FrontWaiting;
@@ -41,6 +48,10 @@ namespace Nyoice.NPC
         public float UrinationElapsed { get; private set; }
         public bool IsUrinationComplete => State == NPCState.ReadyToLeave;
         public bool IsUrinationTimerStarted => _urinationStarted;
+        public Transform ExitPoint => _exitPoint;
+        public bool IsLeavingStarted => _leavingStarted;
+        public bool IsMovingToExitPoint => _movingToExitPoint;
+        public bool IsDestroyScheduled => _destroyScheduled;
 
         private void Awake()
         {
@@ -59,6 +70,7 @@ namespace Nyoice.NPC
         {
             CancelSelectionWait();
             CancelUrinationTimer();
+            _movement?.Stop();
         }
 
         public void Initialize(QueueManager queueManager)
@@ -79,6 +91,11 @@ namespace Nyoice.NPC
         public void ConfigureUrinationDuration(float durationSeconds)
         {
             urinationDurationSeconds = Mathf.Max(0.1f, durationSeconds);
+        }
+
+        public void ConfigureExitFlow(Transform exitPoint)
+        {
+            _exitPoint = exitPoint;
         }
 
         public void WaitInternally()
@@ -285,7 +302,95 @@ namespace Nyoice.NPC
             UrinationElapsed = urinationDurationSeconds;
             Log($"{name} completed urination");
             SetState(NPCState.ReadyToLeave);
+            BeginLeaving();
             return true;
+        }
+
+        public bool BeginLeaving()
+        {
+            if (_leavingStarted || State != NPCState.ReadyToLeave)
+            {
+                return false;
+            }
+
+            UrinalController departingUrinal = TargetUrinal;
+            if (departingUrinal == null || departingUrinal.CurrentUser != this ||
+                departingUrinal.ExitStartPoint == null || _exitPoint == null ||
+                _ticketManager == null || !_ticketManager.HasTicket(this))
+            {
+                return false;
+            }
+
+            _leavingStarted = true;
+            _exitStartReached = false;
+            _movingToExitPoint = false;
+            _finished = false;
+            _destroyScheduled = false;
+
+            Transform exitStartPoint = departingUrinal.ExitStartPoint;
+            int urinalNumber = departingUrinal.UrinalNumber;
+            SetState(NPCState.Leaving);
+
+            if (!departingUrinal.Release(this))
+            {
+                _leavingStarted = false;
+                SetState(NPCState.ReadyToLeave);
+                return false;
+            }
+
+            Log($"{name} released Urinal{urinalNumber:00}");
+            Log($"Urinal{urinalNumber:00} state: Occupied -> Available");
+
+            bool ticketReleased = _ticketManager.ReleaseTicket(this);
+            if (!ticketReleased)
+            {
+                Debug.LogWarning($"{name} could not release its UrinalTicket.", this);
+            }
+
+            TargetUrinal = null;
+            Log($"{name} moving to Urinal{urinalNumber:00} ExitStartPoint");
+            _movement.MoveTo(exitStartPoint.position, HandleExitStartPointReached);
+            return true;
+        }
+
+        private void HandleExitStartPointReached()
+        {
+            if (!_leavingStarted || _exitStartReached || State != NPCState.Leaving)
+            {
+                return;
+            }
+
+            _exitStartReached = true;
+            Log($"{name} reached ExitStartPoint");
+
+            if (_movingToExitPoint || _exitPoint == null)
+            {
+                return;
+            }
+
+            _movingToExitPoint = true;
+            Log($"{name} moving to ExitPoint");
+            _movement.MoveTo(_exitPoint.position, HandleExitPointReached);
+        }
+
+        private void HandleExitPointReached()
+        {
+            if (!_leavingStarted || _finished || State != NPCState.Leaving)
+            {
+                return;
+            }
+
+            _finished = true;
+            _movement.Stop();
+            Log($"{name} reached ExitPoint");
+            SetState(NPCState.Finished);
+            _destroyScheduled = true;
+            Log($"{name} destroyed");
+
+            if (Application.isPlaying)
+            {
+                Destroy(gameObject);
+            }
         }
 
         private void SetPresentationVisible(bool visible)
