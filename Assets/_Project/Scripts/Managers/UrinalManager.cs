@@ -48,32 +48,39 @@ namespace Nyoice.Managers
 
         private void Update()
         {
+            bool leftPressed = Input.GetKeyDown(KeyCode.LeftArrow);
+            bool rightPressed = Input.GetKeyDown(KeyCode.RightArrow);
+            bool mousePressed = Input.GetMouseButtonDown(0);
+            bool touchPressed = Input.touchCount > 0 && Input.GetTouch(0).phase == TouchPhase.Began;
+
             if (ActiveSelectionNpc == null)
             {
+                LogIgnoredInput(leftPressed, rightPressed, mousePressed, touchPressed);
                 return;
             }
 
-            if (Input.GetKeyDown(KeyCode.LeftArrow))
+            if (leftPressed)
             {
+                Log("LeftArrow pressed");
                 MoveSelection(-1);
             }
-            else if (Input.GetKeyDown(KeyCode.RightArrow))
+            else if (rightPressed)
             {
+                Log("RightArrow pressed");
                 MoveSelection(1);
             }
 
-            if (Input.GetMouseButtonDown(0))
+            if (touchPressed)
             {
-                SelectFromScreenPosition(Input.mousePosition);
+                Vector2 touchPosition = Input.GetTouch(0).position;
+                Log($"Screen tap detected at ({touchPosition.x:0}, {touchPosition.y:0})");
+                SelectFromScreenPosition(touchPosition);
             }
-
-            if (Input.touchCount > 0)
+            else if (mousePressed)
             {
-                Touch touch = Input.GetTouch(0);
-                if (touch.phase == TouchPhase.Began)
-                {
-                    SelectFromScreenPosition(touch.position);
-                }
+                Vector2 mousePosition = Input.mousePosition;
+                Log($"Screen click detected at ({mousePosition.x:0}, {mousePosition.y:0})");
+                SelectFromScreenPosition(mousePosition);
             }
         }
 
@@ -85,8 +92,13 @@ namespace Nyoice.Managers
             ClearSelection();
             ActiveSelectionNpc = null;
             urinals = configuredUrinals;
-            inputCamera = camera;
+            inputCamera = camera != null ? camera : Camera.main;
             audioSource = source;
+
+            if (inputCamera == null)
+            {
+                Log("Main Camera reference is not available");
+            }
         }
 
         public IReadOnlyList<UrinalController> GetAvailableByPriority()
@@ -126,7 +138,7 @@ namespace Nyoice.Managers
             CurrentSelection = urinal;
             CurrentSelection.SetSelected(true);
             PlaySelectionSound();
-            Log($"Urinal{urinal.UrinalNumber:00} selected");
+            Log($"Urinal{urinal.UrinalNumber:00} selected for {ActiveSelectionNpc.name}");
             return true;
         }
 
@@ -176,6 +188,7 @@ namespace Nyoice.Managers
             }
 
             ClearSelection();
+            Log($"{npc.name} confirmed Urinal{selected.UrinalNumber:00}");
             Log($"{npc.name} reserved Urinal{selected.UrinalNumber:00}");
             return selected;
         }
@@ -221,17 +234,48 @@ namespace Nyoice.Managers
             Camera camera = inputCamera != null ? inputCamera : Camera.main;
             if (camera == null)
             {
+                Log("Click did not hit a selectable urinal: Main Camera is not available");
                 return;
             }
 
             Ray ray = camera.ScreenPointToRay(screenPosition);
             if (!Physics.Raycast(ray, out RaycastHit hit))
             {
+                Log("Click did not hit a selectable urinal");
                 return;
             }
 
             UrinalController urinal = hit.collider.GetComponentInParent<UrinalController>();
+            if (urinal == null || !urinal.IsAvailable)
+            {
+                Log("Click did not hit a selectable urinal");
+                return;
+            }
+
+            Log($"Click hit Urinal{urinal.UrinalNumber:00}");
             SelectUrinal(urinal);
+        }
+
+        private void LogIgnoredInput(
+            bool leftPressed,
+            bool rightPressed,
+            bool mousePressed,
+            bool touchPressed)
+        {
+            if (leftPressed)
+            {
+                Log("LeftArrow pressed but ignored because there is no ActiveSelectionNpc");
+            }
+
+            if (rightPressed)
+            {
+                Log("RightArrow pressed but ignored because there is no ActiveSelectionNpc");
+            }
+
+            if (mousePressed || touchPressed)
+            {
+                Log("Screen input ignored because there is no ActiveSelectionNpc");
+            }
         }
 
         private UrinalController GetUrinal(int number)

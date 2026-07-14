@@ -5,6 +5,7 @@ namespace Nyoice.NPC
         Queue,
         FrontWaiting,
         ApproachingLine,
+        SelectingUrinal,
         CrossingLine,
         WalkingToUrinal,
         UsingUrinal,
@@ -12,4 +13,3 @@ namespace Nyoice.NPC
         Finished
     }
 }
-

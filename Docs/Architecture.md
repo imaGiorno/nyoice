@@ -81,10 +81,12 @@ Sprint 4 adds a state-driven path from the queue front to a urinal.
 
 The runtime flow is:
 
-`Queue -> FrontWaiting -> ApproachingLine -> CrossingLine -> WalkingToUrinal -> UsingUrinal`
+`Queue -> FrontWaiting -> ApproachingLine -> SelectingUrinal -> CrossingLine -> WalkingToUrinal -> UsingUrinal`
 
 Only one NPC may be in `ApproachingLine` or `CrossingLine` as the SelectionZone occupant. The zone is released after the urinal reservation is confirmed at NyoiceLine, while the UrinalTicket remains held until a later exit sprint.
 
 The visible waiting limit counts unique NPC references across SelectionZone, DecisionPoint, and all QueueSlots. Internal waiters remain hidden until this combined count is below eight.
+
+At NyoiceApproachPoint, the SelectionZone occupant enters `SelectingUrinal` and remains stationary for a configurable two-second default window. Pointer, touch, and arrow input remain active throughout this wait. The yellow four-sided highlight frame is placed toward the camera in front of the urinal Body.
 
 Tickets are released through `NPCController.ReleaseUrinalTicket()`. Sprint 4 exposes this entry point but does not start the exit flow.

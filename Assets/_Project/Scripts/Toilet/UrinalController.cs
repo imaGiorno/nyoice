@@ -6,7 +6,7 @@ namespace Nyoice.Toilet
     [DisallowMultipleComponent]
     public sealed class UrinalController : MonoBehaviour
     {
-        private static readonly Color DisabledColor = new Color(0.38f, 0.4f, 0.42f);
+        private static readonly Color DisabledColor = new Color(0.28f, 0.3f, 0.32f);
 
         [SerializeField, Range(1, 8)]
         private int urinalNumber = 1;
@@ -35,6 +35,8 @@ namespace Nyoice.Toilet
         public NPCController ReservedBy { get; private set; }
         public bool IsAvailable => state == UrinalState.Available;
         public bool IsSelected => highlight != null && highlight.activeSelf;
+        public GameObject Highlight => highlight;
+        public Renderer BodyRenderer => bodyRenderer;
 
         public void Configure(
             int number,
@@ -116,4 +118,3 @@ namespace Nyoice.Toilet
         }
     }
 }
-

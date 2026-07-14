@@ -361,6 +361,14 @@ namespace Nyoice.Editor
                         new Color(0.82f, 0.88f, 0.92f)).transform;
                 }
 
+                BoxCollider bodyCollider = body.GetComponent<BoxCollider>();
+                if (bodyCollider == null)
+                {
+                    bodyCollider = body.gameObject.AddComponent<BoxCollider>();
+                }
+
+                bodyCollider.isTrigger = false;
+
                 Transform waypointGroup = waypointRoot.Find(urinalName);
                 if (waypointGroup == null)
                 {
@@ -408,25 +416,103 @@ namespace Nyoice.Editor
             Transform highlight = urinal.Find("Highlight");
             if (highlight == null)
             {
-                highlight = GameObject.CreatePrimitive(PrimitiveType.Cube).transform;
-                highlight.name = "Highlight";
+                highlight = new GameObject("Highlight").transform;
                 highlight.SetParent(urinal, false);
             }
 
-            highlight.localPosition = body.localPosition;
+            RemovePrimitiveComponents(highlight.gameObject);
+            float frontZ = body.localPosition.z - ((body.localScale.z * 0.5f) + 0.08f);
+            highlight.localPosition = new Vector3(body.localPosition.x, body.localPosition.y, frontZ);
             highlight.localRotation = body.localRotation;
-            highlight.localScale = body.localScale + new Vector3(0.18f, 0.18f, 0.18f);
-            Renderer renderer = highlight.GetComponent<Renderer>();
-            renderer.material.color = new Color(1f, 0.85f, 0.1f);
+            highlight.localScale = Vector3.one;
 
-            Collider collider = highlight.GetComponent<Collider>();
+            const float borderThickness = 0.12f;
+            const float borderDepth = 0.06f;
+            float outerWidth = body.localScale.x + 0.3f;
+            float outerHeight = body.localScale.y + 0.3f;
+            Color yellow = new Color(1f, 0.82f, 0.05f);
+
+            EnsureHighlightBar(
+                highlight,
+                "Top",
+                new Vector3(0f, (outerHeight - borderThickness) * 0.5f, 0f),
+                new Vector3(outerWidth, borderThickness, borderDepth),
+                yellow);
+            EnsureHighlightBar(
+                highlight,
+                "Bottom",
+                new Vector3(0f, -(outerHeight - borderThickness) * 0.5f, 0f),
+                new Vector3(outerWidth, borderThickness, borderDepth),
+                yellow);
+            EnsureHighlightBar(
+                highlight,
+                "Left",
+                new Vector3(-(outerWidth - borderThickness) * 0.5f, 0f, 0f),
+                new Vector3(borderThickness, outerHeight, borderDepth),
+                yellow);
+            EnsureHighlightBar(
+                highlight,
+                "Right",
+                new Vector3((outerWidth - borderThickness) * 0.5f, 0f, 0f),
+                new Vector3(borderThickness, outerHeight, borderDepth),
+                yellow);
+
+            highlight.gameObject.SetActive(false);
+            return highlight.gameObject;
+        }
+
+        private static void EnsureHighlightBar(
+            Transform highlight,
+            string name,
+            Vector3 localPosition,
+            Vector3 localScale,
+            Color color)
+        {
+            Transform bar = highlight.Find(name);
+            if (bar == null)
+            {
+                bar = GameObject.CreatePrimitive(PrimitiveType.Cube).transform;
+                bar.name = name;
+                bar.SetParent(highlight, false);
+            }
+
+            bar.localPosition = localPosition;
+            bar.localRotation = Quaternion.identity;
+            bar.localScale = localScale;
+            Renderer renderer = bar.GetComponent<Renderer>();
+            Shader shader = Shader.Find("Unlit/Color");
+            if (shader != null)
+            {
+                renderer.sharedMaterial = new Material(shader);
+            }
+
+            renderer.sharedMaterial.color = color;
+            Collider collider = bar.GetComponent<Collider>();
+            if (collider != null)
+            {
+                Object.DestroyImmediate(collider);
+            }
+        }
+
+        private static void RemovePrimitiveComponents(GameObject target)
+        {
+            Collider collider = target.GetComponent<Collider>();
             if (collider != null)
             {
                 Object.DestroyImmediate(collider);
             }
 
-            highlight.gameObject.SetActive(false);
-            return highlight.gameObject;
+            Renderer renderer = target.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                Object.DestroyImmediate(renderer);
+            }
+
+            MeshFilter meshFilter = target.GetComponent<MeshFilter>();
+            if (meshFilter != null)
+            {
+                Object.DestroyImmediate(meshFilter);
+            }
         }
 
         private static void EnsureGameSystems(
@@ -667,4 +753,3 @@ namespace Nyoice.Editor
         }
     }
 }
-

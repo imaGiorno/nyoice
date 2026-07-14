@@ -13,6 +13,10 @@ namespace Nyoice.Editor
     {
         private static readonly MethodInfo MovePointReachedMethod = GetNpcMethod("HandleMovePointReached");
         private static readonly MethodInfo UsePointReachedMethod = GetNpcMethod("HandleUsePointReached");
+        private static readonly MethodInfo ApproachPointReachedMethod = GetNpcMethod(
+            "HandleApproachPointReached");
+        private static readonly MethodInfo CompleteSelectionWaitMethod = GetNpcMethod(
+            "CompleteSelectionWait");
         private static readonly FieldInfo DecisionPointOccupantField = GetQueueManagerField(
             "_decisionPointOccupant");
         private static readonly FieldInfo InternalWaitingListField = GetQueueManagerField(
@@ -122,16 +126,49 @@ namespace Nyoice.Editor
 
             flowNpc.BeginUrinalApproach(new Vector3(6.2f, -3.75f, 0f), new Vector3(5.8f, -3.75f, 0f));
             Require(flowNpc.State == NPCState.ApproachingLine, "NPC did not enter ApproachingLine.");
+            Require(
+                Mathf.Approximately(flowNpc.SelectionWaitSeconds, 2f),
+                "Default urinal selection wait is not two seconds.");
+
+            ApproachPointReachedMethod.Invoke(flowNpc, null);
+            Require(flowNpc.State == NPCState.SelectingUrinal, "NPC did not enter SelectingUrinal.");
+
+            manager.MoveSelection(-1);
+            Require(
+                manager.CurrentSelection == urinals[7],
+                "Left or right selection did not initialize at Urinal08.");
+            manager.MoveSelection(-1);
+            Require(manager.CurrentSelection == urinals[6], "Arrow selection did not move to Urinal07.");
+            Require(manager.SelectUrinal(urinals[4]), "Click-equivalent selection of Urinal05 failed.");
+            Require(manager.CurrentSelection == urinals[4], "Urinal05 did not become the current selection.");
+            Require(CountActiveHighlights(urinals) == 1, "Playable selection must show one highlight.");
+            Require(urinals[4].Highlight.activeSelf, "Selected Highlight GameObject is not active.");
+            Require(
+                !Mathf.Approximately(
+                    urinals[4].Highlight.transform.localPosition.z,
+                    urinals[4].BodyRenderer.transform.localPosition.z),
+                "Highlight is embedded at the same Z position as the urinal Body.");
+
+            CompleteSelectionWaitMethod.Invoke(flowNpc, null);
+            Require(flowNpc.State == NPCState.CrossingLine, "NPC did not cross after the selection wait.");
             flowNpc.HandleNyoiceLineCrossed();
-            Require(flowNpc.TargetUrinal == urinals[7], "Line crossing did not auto-select Urinal08.");
-            Require(urinals[7].State == UrinalState.Reserved, "Line crossing did not reserve the urinal.");
+            Require(flowNpc.TargetUrinal == urinals[4], "Line crossing did not retain selected Urinal05.");
+            Require(urinals[4].State == UrinalState.Reserved, "Selected Urinal05 was not reserved.");
             Require(flowNpc.State == NPCState.WalkingToUrinal, "NPC did not start walking to the urinal.");
 
             MovePointReachedMethod.Invoke(flowNpc, null);
             UsePointReachedMethod.Invoke(flowNpc, null);
             Require(flowNpc.State == NPCState.UsingUrinal, "NPC did not enter UsingUrinal.");
-            Require(urinals[7].State == UrinalState.Occupied, "Urinal did not become Occupied.");
+            Require(urinals[4].State == UrinalState.Occupied, "Selected urinal did not become Occupied.");
             Require(manager.EndSelection(flowNpc), "Flow NPC selection session did not end.");
+
+            NPCController automaticNpc = CreateNpc(root, "AutomaticSelectionNPC");
+            Require(manager.BeginSelection(automaticNpc), "Automatic selection session did not start.");
+            UrinalController automaticUrinal = manager.ConfirmSelection(automaticNpc);
+            Require(automaticUrinal == urinals[7], "No-input selection did not reserve Urinal08.");
+            Require(automaticUrinal.State == UrinalState.Reserved, "Automatic Urinal08 was not Reserved.");
+            Require(manager.EndSelection(automaticNpc), "Automatic selection session did not end.");
+            automaticUrinal.Release(automaticNpc);
         }
 
         private static void ValidateSelectionZoneSerialization(Transform root)
@@ -175,6 +212,19 @@ namespace Nyoice.Editor
                 queueManager.SelectionZoneOccupant == firstNpc &&
                 urinalManager.ActiveSelectionNpc == firstNpc,
                 "SelectionZone occupant changed while occupied.");
+
+            firstNpc.HandleDecisionPointReached();
+            firstNpc.BeginUrinalApproach(approachPoint.position, crossingTarget.position);
+            ApproachPointReachedMethod.Invoke(firstNpc, null);
+            Require(firstNpc.State == NPCState.SelectingUrinal, "SelectionZone NPC did not wait for selection.");
+            Require(
+                queueManager.SelectionZoneOccupant == firstNpc,
+                "SelectionZone was released during the selection wait.");
+            CompleteSelectionWaitMethod.Invoke(firstNpc, null);
+            Require(firstNpc.State == NPCState.CrossingLine, "SelectionZone NPC did not finish its wait.");
+            Require(
+                queueManager.SelectionZoneOccupant == firstNpc,
+                "SelectionZone was released before NyoiceLine confirmation.");
             Require(urinalManager.SelectUrinal(urinals[7]), "SelectionZone urinal selection failed.");
             Require(CountActiveHighlights(urinals) == 1, "SelectionZone must have one highlight.");
             Require(queueManager.NotifySelectionZoneCrossed(firstNpc), "First NPC did not release SelectionZone.");
@@ -289,6 +339,7 @@ namespace Nyoice.Editor
 
                 var highlight = new GameObject("Highlight");
                 highlight.transform.SetParent(urinal.transform, false);
+                highlight.transform.localPosition = new Vector3(0f, 0f, -0.4f);
                 highlight.SetActive(false);
 
                 Transform movePoint = CreatePoint(urinal.transform, "MovePoint", new Vector3(index, 1f, 0f));

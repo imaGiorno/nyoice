@@ -1,3 +1,4 @@
+using System.Collections;
 using Nyoice.Managers;
 using Nyoice.Toilet;
 using UnityEngine;
@@ -11,6 +12,9 @@ namespace Nyoice.NPC
         [SerializeField]
         private bool enableStateLogs = true;
 
+        [SerializeField, Min(0f)]
+        private float selectionWaitSeconds = 2f;
+
         private NPCMovement _movement;
         private QueueManager _queueManager;
         private UrinalManager _urinalManager;
@@ -18,6 +22,7 @@ namespace Nyoice.NPC
         private Renderer[] _renderers;
         private Collider[] _colliders;
         private Vector3 _lineCrossingTarget;
+        private Coroutine _selectionWaitRoutine;
 
         public QueueSlot CurrentSlot { get; private set; }
         public UrinalController TargetUrinal { get; private set; }
@@ -26,6 +31,7 @@ namespace Nyoice.NPC
         public bool IsWaitingForDecision => State == NPCState.FrontWaiting;
         public bool IsPresentationVisible { get; private set; } = true;
         public bool HasUrinalTicket => _ticketManager != null && _ticketManager.HasTicket(this);
+        public float SelectionWaitSeconds => selectionWaitSeconds;
 
         private void Awake()
         {
@@ -49,6 +55,7 @@ namespace Nyoice.NPC
 
         public void WaitInternally()
         {
+            CancelSelectionWait();
             CurrentSlot = null;
             IsWaitingAtSlot = false;
             TargetUrinal = null;
@@ -87,7 +94,7 @@ namespace Nyoice.NPC
 
         public void HandleNyoiceLineCrossed()
         {
-            if (State != NPCState.ApproachingLine && State != NPCState.CrossingLine)
+            if (State != NPCState.CrossingLine)
             {
                 return;
             }
@@ -140,7 +147,36 @@ namespace Nyoice.NPC
                 return;
             }
 
+            _movement.Stop();
+            SetState(NPCState.SelectingUrinal);
+            Log($"{name} waiting {selectionWaitSeconds:0.##} seconds for urinal selection");
+
+            if (selectionWaitSeconds <= 0f)
+            {
+                CompleteSelectionWait();
+            }
+            else if (Application.isPlaying)
+            {
+                _selectionWaitRoutine = StartCoroutine(WaitBeforeCrossing());
+            }
+        }
+
+        private IEnumerator WaitBeforeCrossing()
+        {
+            yield return new WaitForSeconds(selectionWaitSeconds);
+            _selectionWaitRoutine = null;
+            CompleteSelectionWait();
+        }
+
+        private void CompleteSelectionWait()
+        {
+            if (State != NPCState.SelectingUrinal)
+            {
+                return;
+            }
+
             SetState(NPCState.CrossingLine);
+            Log($"{name} selection wait completed");
             _movement.MoveTo(_lineCrossingTarget, HandleCrossingTargetReached);
         }
 
@@ -209,6 +245,15 @@ namespace Nyoice.NPC
             if (_colliders == null)
             {
                 _colliders = GetComponentsInChildren<Collider>(true);
+            }
+        }
+
+        private void CancelSelectionWait()
+        {
+            if (_selectionWaitRoutine != null)
+            {
+                StopCoroutine(_selectionWaitRoutine);
+                _selectionWaitRoutine = null;
             }
         }
 
