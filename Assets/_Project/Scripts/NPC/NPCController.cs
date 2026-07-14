@@ -22,6 +22,7 @@ namespace Nyoice.NPC
         private QueueManager _queueManager;
         private UrinalManager _urinalManager;
         private UrinalTicketManager _ticketManager;
+        private GameStateManager _gameStateManager;
         private Transform _exitPoint;
         private Renderer[] _renderers;
         private Collider[] _colliders;
@@ -52,6 +53,7 @@ namespace Nyoice.NPC
         public bool IsLeavingStarted => _leavingStarted;
         public bool IsMovingToExitPoint => _movingToExitPoint;
         public bool IsDestroyScheduled => _destroyScheduled;
+        public bool IsGameOver => _gameStateManager != null && _gameStateManager.IsGameOver;
 
         private void Awake()
         {
@@ -71,6 +73,14 @@ namespace Nyoice.NPC
             CancelSelectionWait();
             CancelUrinationTimer();
             _movement?.Stop();
+        }
+
+        private void OnDestroy()
+        {
+            if (_gameStateManager != null)
+            {
+                _gameStateManager.GameOver -= HandleGameOver;
+            }
         }
 
         public void Initialize(QueueManager queueManager)
@@ -98,8 +108,34 @@ namespace Nyoice.NPC
             _exitPoint = exitPoint;
         }
 
+        public void ConfigureGameState(GameStateManager gameStateManager)
+        {
+            if (_gameStateManager != null)
+            {
+                _gameStateManager.GameOver -= HandleGameOver;
+            }
+
+            _gameStateManager = gameStateManager;
+            EnsureComponentReferences();
+            _movement.ConfigureGameState(_gameStateManager);
+
+            if (_gameStateManager != null)
+            {
+                _gameStateManager.GameOver += HandleGameOver;
+                if (_gameStateManager.IsGameOver)
+                {
+                    HandleGameOver();
+                }
+            }
+        }
+
         public void WaitInternally()
         {
+            if (IsGameOver)
+            {
+                return;
+            }
+
             CancelSelectionWait();
             CancelUrinationTimer();
             CurrentSlot = null;
@@ -112,6 +148,11 @@ namespace Nyoice.NPC
 
         public void EnterVisibleQueue(QueueSlot slot)
         {
+            if (IsGameOver || slot == null)
+            {
+                return;
+            }
+
             SetPresentationVisible(true);
             CurrentSlot = slot;
             IsWaitingAtSlot = false;
@@ -121,6 +162,11 @@ namespace Nyoice.NPC
 
         public void MoveToDecisionPoint(Vector3 decisionPosition)
         {
+            if (IsGameOver)
+            {
+                return;
+            }
+
             CurrentSlot = null;
             IsWaitingAtSlot = false;
             SetState(NPCState.Queue);
@@ -129,7 +175,7 @@ namespace Nyoice.NPC
 
         public void BeginUrinalApproach(Vector3 approachPosition, Vector3 crossingTarget)
         {
-            if (State != NPCState.FrontWaiting || !HasUrinalTicket)
+            if (IsGameOver || State != NPCState.FrontWaiting || !HasUrinalTicket)
             {
                 return;
             }
@@ -141,7 +187,7 @@ namespace Nyoice.NPC
 
         public void HandleNyoiceLineCrossed()
         {
-            if (State != NPCState.CrossingLine)
+            if (IsGameOver || State != NPCState.CrossingLine)
             {
                 return;
             }
@@ -174,12 +220,22 @@ namespace Nyoice.NPC
 
         private void HandleQueueSlotReached()
         {
+            if (IsGameOver)
+            {
+                return;
+            }
+
             IsWaitingAtSlot = true;
             _queueManager.NotifyQueueSlotReached(this);
         }
 
         public void HandleDecisionPointReached()
         {
+            if (IsGameOver)
+            {
+                return;
+            }
+
             SetState(NPCState.FrontWaiting);
             if (_queueManager != null)
             {
@@ -189,7 +245,7 @@ namespace Nyoice.NPC
 
         private void HandleApproachPointReached()
         {
-            if (State != NPCState.ApproachingLine)
+            if (IsGameOver || State != NPCState.ApproachingLine)
             {
                 return;
             }
@@ -217,7 +273,7 @@ namespace Nyoice.NPC
 
         private void CompleteSelectionWait()
         {
-            if (State != NPCState.SelectingUrinal)
+            if (IsGameOver || State != NPCState.SelectingUrinal)
             {
                 return;
             }
@@ -234,7 +290,7 @@ namespace Nyoice.NPC
 
         private void HandleMovePointReached()
         {
-            if (State != NPCState.WalkingToUrinal || TargetUrinal == null)
+            if (IsGameOver || State != NPCState.WalkingToUrinal || TargetUrinal == null)
             {
                 return;
             }
@@ -244,7 +300,7 @@ namespace Nyoice.NPC
 
         private void HandleUsePointReached()
         {
-            if (State != NPCState.WalkingToUrinal || TargetUrinal == null)
+            if (IsGameOver || State != NPCState.WalkingToUrinal || TargetUrinal == null)
             {
                 return;
             }
@@ -263,7 +319,7 @@ namespace Nyoice.NPC
 
         public bool BeginUrination()
         {
-            if (_urinationStarted || State != NPCState.UsingUrinal ||
+            if (IsGameOver || _urinationStarted || State != NPCState.UsingUrinal ||
                 TargetUrinal == null || !TargetUrinal.IsOccupied ||
                 TargetUrinal.CurrentUser != this)
             {
@@ -292,7 +348,7 @@ namespace Nyoice.NPC
 
         private bool CompleteUrination()
         {
-            if (!_urinationStarted || State != NPCState.UsingUrinal ||
+            if (IsGameOver || !_urinationStarted || State != NPCState.UsingUrinal ||
                 TargetUrinal == null || !TargetUrinal.IsOccupied ||
                 TargetUrinal.CurrentUser != this)
             {
@@ -308,7 +364,7 @@ namespace Nyoice.NPC
 
         public bool BeginLeaving()
         {
-            if (_leavingStarted || State != NPCState.ReadyToLeave)
+            if (IsGameOver || _leavingStarted || State != NPCState.ReadyToLeave)
             {
                 return false;
             }
@@ -355,7 +411,7 @@ namespace Nyoice.NPC
 
         private void HandleExitStartPointReached()
         {
-            if (!_leavingStarted || _exitStartReached || State != NPCState.Leaving)
+            if (IsGameOver || !_leavingStarted || _exitStartReached || State != NPCState.Leaving)
             {
                 return;
             }
@@ -375,7 +431,7 @@ namespace Nyoice.NPC
 
         private void HandleExitPointReached()
         {
-            if (!_leavingStarted || _finished || State != NPCState.Leaving)
+            if (IsGameOver || !_leavingStarted || _finished || State != NPCState.Leaving)
             {
                 return;
             }
@@ -453,7 +509,7 @@ namespace Nyoice.NPC
 
         private void SetState(NPCState nextState)
         {
-            if (State == nextState)
+            if (IsGameOver || State == nextState)
             {
                 return;
             }
@@ -469,6 +525,13 @@ namespace Nyoice.NPC
             {
                 Debug.Log(message, this);
             }
+        }
+
+        private void HandleGameOver()
+        {
+            CancelSelectionWait();
+            CancelUrinationTimer();
+            _movement?.Stop();
         }
     }
 }

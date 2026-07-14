@@ -93,3 +93,12 @@
 - `TicketReleased` remains the single signal that retries a FrontWaiting DecisionPoint NPC. No second queue progression path is introduced for exits.
 - NPC destruction is scheduled only after the guarded `Leaving -> Finished` transition at ExitPoint. An Editor-only validation flag makes this observable without immediate Play Mode destruction.
 - Object pooling remains deferred. Completed NPC GameObjects are destroyed after reaching ExitPoint.
+
+## Sprint 5-3A decisions
+
+- GameOver is an explicit shared state rather than `Time.timeScale = 0`. Each gameplay owner blocks new work, while every configured `NPCMovement` stops its active callback immediately through the GameOver event.
+- Discomfort counts adjacent urinal pairs, not distinct NPCs. Three consecutive Occupied urinals therefore produce exactly two pairs.
+- Occupied is the authoritative adjacency condition. This includes `UsingUrinal` and `ReadyToLeave`, while Reserved is excluded. Existing Sprint5-2 release timing removes a urinal from adjacency as soon as leaving begins.
+- Discomfort is frame-rate independent: pair count is multiplied by the serialized per-pair rate and `Time.deltaTime`.
+- GameOver is one-shot and clamps discomfort to 100 before notifying listeners. The UI receives both value and state events so `100 / 100` and `GAME OVER` remain synchronized.
+- The status HUD uses standard uGUI and the built-in legacy runtime font. No external font, asset, package, IMGUI, or restart control is introduced.

@@ -1,4 +1,5 @@
 using System;
+using Nyoice.Managers;
 using UnityEngine;
 
 namespace Nyoice.NPC
@@ -16,12 +17,39 @@ namespace Nyoice.NPC
 
         private Vector3 _targetPosition;
         private Action _onArrived;
+        private GameStateManager _gameStateManager;
 
         public bool IsMoving { get; private set; }
         public Vector3 TargetPosition => _targetPosition;
+        public bool IsMovementBlocked => _gameStateManager != null && _gameStateManager.IsGameOver;
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromGameState();
+        }
+
+        public void ConfigureGameState(GameStateManager gameStateManager)
+        {
+            UnsubscribeFromGameState();
+            _gameStateManager = gameStateManager;
+            if (_gameStateManager != null)
+            {
+                _gameStateManager.GameOver += HandleGameOver;
+                if (_gameStateManager.IsGameOver)
+                {
+                    Stop();
+                }
+            }
+        }
 
         public void MoveTo(Vector3 targetPosition, Action onArrived)
         {
+            if (IsMovementBlocked)
+            {
+                Stop();
+                return;
+            }
+
             _targetPosition = targetPosition;
             _onArrived = onArrived;
             IsMoving = true;
@@ -36,6 +64,12 @@ namespace Nyoice.NPC
 
         private void Update()
         {
+            if (IsMovementBlocked)
+            {
+                Stop();
+                return;
+            }
+
             if (!IsMoving)
             {
                 return;
@@ -57,6 +91,19 @@ namespace Nyoice.NPC
             Action onArrived = _onArrived;
             _onArrived = null;
             onArrived?.Invoke();
+        }
+
+        private void UnsubscribeFromGameState()
+        {
+            if (_gameStateManager != null)
+            {
+                _gameStateManager.GameOver -= HandleGameOver;
+            }
+        }
+
+        private void HandleGameOver()
+        {
+            Stop();
         }
     }
 }

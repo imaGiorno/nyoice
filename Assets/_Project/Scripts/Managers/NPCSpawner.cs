@@ -19,10 +19,20 @@ namespace Nyoice.Managers
         [SerializeField]
         private QueueManager queueManager;
 
+        [SerializeField]
+        private GameStateManager gameStateManager;
+
         [SerializeField, Min(0.1f)]
         private float spawnIntervalSeconds = 3f;
 
         private int _spawnedNpcCount;
+
+        public bool IsSpawningBlocked => gameStateManager != null && gameStateManager.IsGameOver;
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromGameState();
+        }
 
         public void Configure(
             NPCController prefab,
@@ -34,9 +44,22 @@ namespace Nyoice.Managers
             queueManager = manager;
         }
 
+        public void ConfigureGameState(GameStateManager configuredGameStateManager)
+        {
+            UnsubscribeFromGameState();
+            gameStateManager = configuredGameStateManager;
+            SubscribeToGameState();
+
+            if (IsSpawningBlocked)
+            {
+                HandleGameOver();
+            }
+        }
+
         private IEnumerator Start()
         {
             ResolveRuntimeReferences();
+            SubscribeToGameState();
             if (npcPrefab == null || spawnPoint == null || queueManager == null || !queueManager.EnsureRuntimeReferences())
             {
                 Debug.LogError("NPCSpawner could not initialize its prefab, SpawnPoint, or QueueManager.", this);
@@ -49,12 +72,23 @@ namespace Nyoice.Managers
             while (true)
             {
                 yield return wait;
+                if (IsSpawningBlocked)
+                {
+                    yield break;
+                }
+
                 SpawnNpc();
             }
         }
 
         private void SpawnNpc()
         {
+            if (IsSpawningBlocked)
+            {
+                HandleGameOver();
+                return;
+            }
+
             if (npcPrefab == null || spawnPoint == null || queueManager == null)
             {
                 Debug.LogError("NPCSpawner is missing its prefab, SpawnPoint, or QueueManager reference.", this);
@@ -80,7 +114,35 @@ namespace Nyoice.Managers
                 GameObject resolvedSpawnPoint = GameObject.Find("GameStage/Entrance/SpawnPoint");
                 spawnPoint = resolvedSpawnPoint != null ? resolvedSpawnPoint.transform : null;
             }
+
+            if (gameStateManager == null)
+            {
+                gameStateManager = FindAnyObjectByType<GameStateManager>();
+            }
+        }
+
+        private void SubscribeToGameState()
+        {
+            if (gameStateManager != null)
+            {
+                gameStateManager.GameOver -= HandleGameOver;
+                gameStateManager.GameOver += HandleGameOver;
+            }
+        }
+
+        private void UnsubscribeFromGameState()
+        {
+            if (gameStateManager != null)
+            {
+                gameStateManager.GameOver -= HandleGameOver;
+            }
+        }
+
+        private void HandleGameOver()
+        {
+            StopAllCoroutines();
+            enabled = false;
+            Debug.Log("NPCSpawner stopped because game is over", this);
         }
     }
 }
-

@@ -106,3 +106,15 @@ Sprint 5-2 completes the first reusable NPC lifecycle:
 Each `UrinalController` stores its own `ExitStartPoint`. `QueueManager` stores the shared `ExitPoint` and configures every newly enqueued NPC with it. Setup repairs both references on existing GameStages. The existing `TicketReleased` subscription immediately retries the DecisionPoint occupant, so a returned ticket can advance the next NPC into SelectionZone in the same frame.
 
 Leaving uses guarded one-shot transitions. Urinal release, ticket release, ExitStart arrival, ExitPoint arrival, and destruction scheduling each ignore duplicate notifications. Disabled or destroyed NPCs clear their movement callback and active Coroutines.
+
+## Sprint 5-3A discomfort and game-over flow
+
+`GameStateManager` owns the authoritative `Playing` or `GameOver` state. Its one-shot `TriggerGameOver()` method raises a single event without changing `Time.timeScale`. NPC spawning, queue and SelectionZone progression, urinal input, Ticket acquisition, NPC state transitions, urination and exit starts, and active NPC movement all consult this state.
+
+`DiscomfortManager` owns a clamped `0..100` value and the eight urinal references sorted by urinal number. Every frame it counts only consecutive Occupied pairs `(01,02)` through `(07,08)` and adds:
+
+`adjacent pair count * discomfortPerAdjacentPairPerSecond * Time.deltaTime`
+
+The default rate is ten points per pair per second. Reserved and Available urinals do not contribute. The value never decreases in Sprint 5-3A. Reaching 100 triggers GameOver immediately.
+
+`DiscomfortUI` is a Runtime uGUI presenter. Setup creates or repairs `UI/DiscomfortCanvas` with `DiscomfortText`, `DiscomfortSlider/Fill`, and `GameOverText`. It subscribes to discomfort and GameOver events, continues to show `100 / 100`, and displays `GAME OVER` at the center of the GameView.
