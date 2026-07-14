@@ -9,6 +9,7 @@ namespace Nyoice.NPC
         CrossingLine,
         WalkingToUrinal,
         UsingUrinal,
+        ReadyToLeave,
         Leaving,
         Finished
     }

@@ -15,6 +15,9 @@ namespace Nyoice.NPC
         [SerializeField, Min(0f)]
         private float selectionWaitSeconds = 2f;
 
+        [SerializeField, Min(0.1f)]
+        private float urinationDurationSeconds = 3f;
+
         private NPCMovement _movement;
         private QueueManager _queueManager;
         private UrinalManager _urinalManager;
@@ -23,6 +26,8 @@ namespace Nyoice.NPC
         private Collider[] _colliders;
         private Vector3 _lineCrossingTarget;
         private Coroutine _selectionWaitRoutine;
+        private Coroutine _urinationRoutine;
+        private bool _urinationStarted;
 
         public QueueSlot CurrentSlot { get; private set; }
         public UrinalController TargetUrinal { get; private set; }
@@ -32,10 +37,28 @@ namespace Nyoice.NPC
         public bool IsPresentationVisible { get; private set; } = true;
         public bool HasUrinalTicket => _ticketManager != null && _ticketManager.HasTicket(this);
         public float SelectionWaitSeconds => selectionWaitSeconds;
+        public float UrinationDurationSeconds => urinationDurationSeconds;
+        public float UrinationElapsed { get; private set; }
+        public bool IsUrinationComplete => State == NPCState.ReadyToLeave;
+        public bool IsUrinationTimerStarted => _urinationStarted;
 
         private void Awake()
         {
             EnsureComponentReferences();
+        }
+
+        private void OnEnable()
+        {
+            if (State == NPCState.UsingUrinal && !_urinationStarted)
+            {
+                BeginUrination();
+            }
+        }
+
+        private void OnDisable()
+        {
+            CancelSelectionWait();
+            CancelUrinationTimer();
         }
 
         public void Initialize(QueueManager queueManager)
@@ -53,12 +76,19 @@ namespace Nyoice.NPC
             _ticketManager = ticketManager;
         }
 
+        public void ConfigureUrinationDuration(float durationSeconds)
+        {
+            urinationDurationSeconds = Mathf.Max(0.1f, durationSeconds);
+        }
+
         public void WaitInternally()
         {
             CancelSelectionWait();
+            CancelUrinationTimer();
             CurrentSlot = null;
             IsWaitingAtSlot = false;
             TargetUrinal = null;
+            UrinationElapsed = 0f;
             SetState(NPCState.Queue);
             SetPresentationVisible(false);
         }
@@ -211,6 +241,51 @@ namespace Nyoice.NPC
             SetState(NPCState.UsingUrinal);
             Log($"{name} reached Urinal{TargetUrinal.UrinalNumber:00} UsePoint");
             Log($"Urinal{TargetUrinal.UrinalNumber:00} state: Reserved -> Occupied");
+            BeginUrination();
+        }
+
+        public bool BeginUrination()
+        {
+            if (_urinationStarted || State != NPCState.UsingUrinal ||
+                TargetUrinal == null || !TargetUrinal.IsOccupied ||
+                TargetUrinal.CurrentUser != this)
+            {
+                return false;
+            }
+
+            _urinationStarted = true;
+            UrinationElapsed = 0f;
+            Log($"{name} started urination at Urinal{TargetUrinal.UrinalNumber:00}");
+            Log($"{name} urination time: {urinationDurationSeconds:0.0} seconds");
+
+            if (Application.isPlaying)
+            {
+                _urinationRoutine = StartCoroutine(WaitForUrinationCompletion());
+            }
+
+            return true;
+        }
+
+        private IEnumerator WaitForUrinationCompletion()
+        {
+            yield return new WaitForSeconds(urinationDurationSeconds);
+            _urinationRoutine = null;
+            CompleteUrination();
+        }
+
+        private bool CompleteUrination()
+        {
+            if (!_urinationStarted || State != NPCState.UsingUrinal ||
+                TargetUrinal == null || !TargetUrinal.IsOccupied ||
+                TargetUrinal.CurrentUser != this)
+            {
+                return false;
+            }
+
+            UrinationElapsed = urinationDurationSeconds;
+            Log($"{name} completed urination");
+            SetState(NPCState.ReadyToLeave);
+            return true;
         }
 
         private void SetPresentationVisible(bool visible)
@@ -254,6 +329,20 @@ namespace Nyoice.NPC
             {
                 StopCoroutine(_selectionWaitRoutine);
                 _selectionWaitRoutine = null;
+            }
+        }
+
+        private void CancelUrinationTimer()
+        {
+            if (_urinationRoutine != null)
+            {
+                StopCoroutine(_urinationRoutine);
+                _urinationRoutine = null;
+            }
+
+            if (State == NPCState.UsingUrinal)
+            {
+                _urinationStarted = false;
             }
         }
 

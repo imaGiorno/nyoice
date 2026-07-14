@@ -585,10 +585,14 @@ namespace Nyoice.Editor
                 npcRoot.AddComponent<NPCMovement>();
             }
 
-            if (npcRoot.GetComponent<NPCController>() == null)
+            NPCController npcController = npcRoot.GetComponent<NPCController>();
+            if (npcController == null)
             {
-                npcRoot.AddComponent<NPCController>();
+                npcController = npcRoot.AddComponent<NPCController>();
             }
+
+            npcController.ConfigureUrinationDuration(3f);
+            EditorUtility.SetDirty(npcController);
 
             Rigidbody body = npcRoot.GetComponent<Rigidbody>();
             if (body == null)

@@ -77,6 +77,8 @@
 - Selection input receives a two-second default pause at NyoiceApproachPoint so pointer and keyboard choices are observable before line crossing.
 - The selected urinal uses an unlit yellow four-sided frame in front of the Body instead of relying on subtle emission.
 - Urinal Body and Highlight placement uses local transforms only. Existing Highlights are deleted and rebuilt on every setup run so malformed scene children are repaired without replacing GameStage.
+- Urination duration belongs to each NPC and defaults to three seconds. `ReadyToLeave` represents completed use without implying urinal release, Ticket return, or exit movement.
+- Urinal release and Ticket return are deferred until movement from UsePoint to ExitStartPoint begins in Sprint 5-2.
 - Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
 - The destination is immutable after `UrinalController.Reserve()` succeeds.
 - A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.

@@ -91,4 +91,6 @@ At NyoiceApproachPoint, the SelectionZone occupant enters `SelectingUrinal` and 
 
 Each urinal Body is fixed at local `(0, 0, 0)` beneath its `UrinalXX` root. Setup deletes and rebuilds that urinal's Highlight as a direct child using Body-local coordinates, preventing all frames from collapsing to the world origin.
 
+Sprint 5-1 extends the NPC flow to `WalkingToUrinal -> UsingUrinal -> ReadyToLeave`. `NPCController` owns a serialized three-second urination Coroutine. Completion changes only the NPC state: the urinal remains Occupied, the NPC remains at UsePoint, and its UrinalTicket remains held.
+
 Tickets are released through `NPCController.ReleaseUrinalTicket()`. Sprint 4 exposes this entry point but does not start the exit flow.
