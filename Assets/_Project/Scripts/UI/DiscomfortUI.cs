@@ -22,8 +22,33 @@ namespace Nyoice.UI
         [SerializeField]
         private Text gameOverText;
 
+        private bool _isSubscribed;
+        private bool _hasLoggedInitializationError;
+
         public string DisplayedText => discomfortText != null ? discomfortText.text : string.Empty;
         public bool IsGameOverVisible => gameOverText != null && gameOverText.gameObject.activeSelf;
+        public bool IsSubscribed => _isSubscribed;
+        public bool HasResolvedReferences => discomfortManager != null
+            && gameStateManager != null
+            && discomfortText != null
+            && discomfortSlider != null
+            && gameOverText != null;
+        public int RefreshCount { get; private set; }
+
+        private void Awake()
+        {
+            EnsureRuntimeBindings();
+        }
+
+        private void OnEnable()
+        {
+            EnsureRuntimeBindings();
+        }
+
+        private void OnDisable()
+        {
+            Unsubscribe();
+        }
 
         private void OnDestroy()
         {
@@ -43,8 +68,37 @@ namespace Nyoice.UI
             discomfortText = configuredDiscomfortText;
             discomfortSlider = configuredDiscomfortSlider;
             gameOverText = configuredGameOverText;
+            _hasLoggedInitializationError = false;
+
+            if (Application.isPlaying && isActiveAndEnabled)
+            {
+                Subscribe();
+            }
+
+            Refresh();
+        }
+
+        public bool EnsureRuntimeBindings()
+        {
+            bool resolved = ResolveReferences();
+            if (!resolved)
+            {
+                if (!_hasLoggedInitializationError)
+                {
+                    _hasLoggedInitializationError = true;
+                    Debug.LogError(
+                        "DiscomfortUI could not resolve all required manager and UI references.",
+                        this);
+                }
+
+                Unsubscribe();
+                return false;
+            }
+
+            _hasLoggedInitializationError = false;
             Subscribe();
             Refresh();
+            return true;
         }
 
         public void Refresh()
@@ -55,6 +109,11 @@ namespace Nyoice.UI
             float maximum = discomfortManager != null
                 ? discomfortManager.MaxDiscomfort
                 : 100f;
+            bool isGameOver = gameStateManager != null && gameStateManager.IsGameOver;
+            if (isGameOver)
+            {
+                current = maximum;
+            }
 
             if (discomfortText != null)
             {
@@ -71,26 +130,31 @@ namespace Nyoice.UI
             if (gameOverText != null)
             {
                 gameOverText.text = "GAME OVER";
-                gameOverText.gameObject.SetActive(
-                    gameStateManager != null && gameStateManager.IsGameOver);
+                gameOverText.gameObject.SetActive(isGameOver);
             }
+
+            RefreshCount++;
         }
 
         private void Subscribe()
         {
-            if (discomfortManager != null)
+            if (_isSubscribed || discomfortManager == null || gameStateManager == null)
             {
-                discomfortManager.ValueChanged += HandleValueChanged;
+                return;
             }
 
-            if (gameStateManager != null)
-            {
-                gameStateManager.GameOver += HandleGameOver;
-            }
+            discomfortManager.ValueChanged += HandleValueChanged;
+            gameStateManager.GameOver += HandleGameOver;
+            _isSubscribed = true;
         }
 
         private void Unsubscribe()
         {
+            if (!_isSubscribed)
+            {
+                return;
+            }
+
             if (discomfortManager != null)
             {
                 discomfortManager.ValueChanged -= HandleValueChanged;
@@ -100,6 +164,54 @@ namespace Nyoice.UI
             {
                 gameStateManager.GameOver -= HandleGameOver;
             }
+
+            _isSubscribed = false;
+        }
+
+        private bool ResolveReferences()
+        {
+            if (discomfortManager == null)
+            {
+                discomfortManager = FindManager<DiscomfortManager>();
+            }
+
+            if (gameStateManager == null)
+            {
+                gameStateManager = FindManager<GameStateManager>();
+            }
+
+            if (discomfortText == null)
+            {
+                discomfortText = FindDirectChildComponent<Text>("DiscomfortText");
+            }
+
+            if (discomfortSlider == null)
+            {
+                discomfortSlider = FindDirectChildComponent<Slider>("DiscomfortSlider");
+            }
+
+            if (gameOverText == null)
+            {
+                gameOverText = FindDirectChildComponent<Text>("GameOverText");
+            }
+
+            return HasResolvedReferences;
+        }
+
+        private T FindManager<T>()
+            where T : Component
+        {
+            T managerInValidationRoot = transform.root.GetComponentInChildren<T>(true);
+            return managerInValidationRoot != null
+                ? managerInValidationRoot
+                : FindAnyObjectByType<T>(FindObjectsInactive.Include);
+        }
+
+        private T FindDirectChildComponent<T>(string childName)
+            where T : Component
+        {
+            Transform child = transform.Find(childName);
+            return child != null ? child.GetComponent<T>() : null;
         }
 
         private void HandleValueChanged(float value)

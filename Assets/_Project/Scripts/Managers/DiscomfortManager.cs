@@ -122,6 +122,8 @@ namespace Nyoice.Managers
             _lastAdjacentPairCount = adjacentPairs;
             AdjacentPairCountChanged?.Invoke(adjacentPairs);
             Log($"Adjacent pairs: {adjacentPairs}");
+            Log(
+                $"Discomfort rate: {adjacentPairs * discomfortPerAdjacentPairPerSecond:0.0} per second");
         }
 
         private UrinalController GetUrinal(int number)

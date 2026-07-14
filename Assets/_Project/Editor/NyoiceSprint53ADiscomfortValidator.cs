@@ -1,4 +1,5 @@
 using System;
+using System.Reflection;
 using Nyoice.Managers;
 using Nyoice.NPC;
 using Nyoice.Toilet;
@@ -57,6 +58,37 @@ namespace Nyoice.Editor
                 "Maximum discomfort is not 100.");
             Require(discomfortManager.CountAdjacentPairs() == 0, "Empty urinals have adjacent pairs.");
 
+            DiscomfortUI discomfortUI = CreateUi(
+                root,
+                discomfortManager,
+                gameStateManager,
+                out Text discomfortText,
+                out Slider discomfortSlider,
+                out Text gameOverText);
+            Require(
+                discomfortUI.EnsureRuntimeBindings(),
+                "Play-start equivalent UI initialization failed.");
+            Require(discomfortUI.IsSubscribed, "UI did not subscribe during runtime initialization.");
+            InvokeLifecycle(discomfortUI, "OnDisable");
+            Require(!discomfortUI.IsSubscribed, "UI remained subscribed after OnDisable.");
+
+            SetPrivateField(discomfortUI, "discomfortManager", null);
+            SetPrivateField(discomfortUI, "gameStateManager", null);
+            SetPrivateField(discomfortUI, "discomfortText", null);
+            SetPrivateField(discomfortUI, "discomfortSlider", null);
+            SetPrivateField(discomfortUI, "gameOverText", null);
+            Require(
+                discomfortUI.EnsureRuntimeBindings(),
+                "UI could not recover null manager or child UI references at runtime.");
+            Require(
+                discomfortUI.HasResolvedReferences,
+                "UI did not retain all recovered runtime references.");
+            Require(discomfortUI.IsSubscribed, "UI did not resubscribe after reference recovery.");
+            Require(
+                discomfortText.text == "DISCOMFORT 0 / 100",
+                "Initial UI text is not zero.");
+            Require(Mathf.Approximately(discomfortSlider.value, 0f), "Initial UI Slider is not zero.");
+
             discomfortManager.AdvanceTime(1f);
             Require(
                 Mathf.Approximately(discomfortManager.CurrentDiscomfort, 0f),
@@ -72,15 +104,46 @@ namespace Nyoice.Editor
             Require(
                 Mathf.Approximately(discomfortManager.CurrentDiscomfort, 10f),
                 "One pair did not add ten points in one second.");
+            Require(
+                discomfortText.text == "DISCOMFORT 10 / 100",
+                "ValueChanged did not update UI text from zero to ten.");
+            Require(
+                Mathf.Approximately(discomfortSlider.value, 10f),
+                "ValueChanged did not update the UI Slider to ten.");
 
             float beforeTwoSecondOverlap = discomfortManager.CurrentDiscomfort;
-            discomfortManager.AdvanceTime(2f);
+            discomfortManager.AdvanceTime(2.5f);
             Require(discomfortManager.CountAdjacentPairs() == 1, "One pair did not remain active for two seconds.");
             Require(
                 Mathf.Approximately(
                     discomfortManager.CurrentDiscomfort - beforeTwoSecondOverlap,
-                    20f),
-                "Two seconds of one-pair overlap did not add twenty points.");
+                    25f),
+                "Two and a half seconds of one-pair overlap did not add twenty-five points.");
+            Require(
+                discomfortText.text == "DISCOMFORT 35 / 100",
+                "ValueChanged did not update UI text from ten to thirty-five.");
+            Require(
+                Mathf.Approximately(discomfortSlider.value, 35f),
+                "ValueChanged did not update the UI Slider to thirty-five.");
+
+            InvokeLifecycle(discomfortUI, "OnDisable");
+            Require(!discomfortUI.IsSubscribed, "UI remained subscribed during disable validation.");
+            int refreshCountWhileDisabled = discomfortUI.RefreshCount;
+            string textWhileDisabled = discomfortUI.DisplayedText;
+            discomfortManager.AdvanceTime(0.5f);
+            Require(
+                discomfortUI.RefreshCount == refreshCountWhileDisabled
+                    && discomfortUI.DisplayedText == textWhileDisabled,
+                "Disabled UI still received ValueChanged.");
+
+            InvokeLifecycle(discomfortUI, "OnEnable");
+            InvokeLifecycle(discomfortUI, "OnEnable");
+            Require(discomfortUI.IsSubscribed, "UI did not subscribe after OnEnable.");
+            int refreshCountBeforeSingleEvent = discomfortUI.RefreshCount;
+            discomfortManager.AdvanceTime(0.5f);
+            Require(
+                discomfortUI.RefreshCount == refreshCountBeforeSingleEvent + 1,
+                "Repeated OnEnable caused a duplicate ValueChanged subscription.");
 
             Require(urinals[1].Release(secondNpc), "Urinal02 could not be released.");
             float beforeResolvedAdvance = discomfortManager.CurrentDiscomfort;
@@ -132,14 +195,6 @@ namespace Nyoice.Editor
             Require(urinalManager.BeginSelection(selectionNpc), "Selection did not work before GameOver.");
             Require(urinalManager.SelectUrinal(urinals[7]), "Urinal selection failed before GameOver.");
 
-            DiscomfortUI discomfortUI = CreateUi(
-                root,
-                discomfortManager,
-                gameStateManager,
-                out Text discomfortText,
-                out Slider discomfortSlider,
-                out Text gameOverText);
-
             int gameOverEventCount = 0;
             gameStateManager.GameOver += () => gameOverEventCount++;
             discomfortManager.AdvanceTime(10f);
@@ -169,7 +224,6 @@ namespace Nyoice.Editor
             stoppedNpc.HandleDecisionPointReached();
             Require(stoppedNpc.State == NPCState.Queue, "NPC entered a new state after GameOver.");
 
-            discomfortUI.Refresh();
             Require(discomfortText.text == "DISCOMFORT 100 / 100", "UI text is not synchronized.");
             Require(Mathf.Approximately(discomfortSlider.value, 100f), "UI Slider is not at 100.");
             Require(gameOverText.gameObject.activeSelf, "GameOverText is not visible.");
@@ -269,6 +323,27 @@ namespace Nyoice.Editor
             var child = new GameObject(objectName);
             child.transform.SetParent(root, false);
             return child.AddComponent<T>();
+        }
+
+        private static void InvokeLifecycle(DiscomfortUI ui, string methodName)
+        {
+            MethodInfo method = typeof(DiscomfortUI).GetMethod(
+                methodName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Require(method != null, $"DiscomfortUI.{methodName} was not found.");
+            method.Invoke(ui, null);
+        }
+
+        private static void SetPrivateField(
+            DiscomfortUI ui,
+            string fieldName,
+            UnityEngine.Object value)
+        {
+            FieldInfo field = typeof(DiscomfortUI).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Require(field != null, $"DiscomfortUI.{fieldName} was not found.");
+            field.SetValue(ui, value);
         }
 
         private static void Require(bool condition, string message)

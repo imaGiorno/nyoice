@@ -624,7 +624,7 @@ namespace Nyoice.Editor
 
             Canvas canvas = GetOrAddComponent<Canvas>(canvasObject);
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 20;
+            canvas.sortingOrder = 100;
 
             CanvasScaler scaler = GetOrAddComponent<CanvasScaler>(canvasObject);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -635,11 +635,12 @@ namespace Nyoice.Editor
             Text discomfortText = EnsureUiText(
                 canvasObject.transform,
                 "DiscomfortText",
-                new Vector2(0.25f, 0.91f),
-                new Vector2(0.75f, 0.98f),
-                30,
+                new Vector2(0.2f, 0.90f),
+                new Vector2(0.8f, 0.99f),
+                40,
                 TextAnchor.MiddleCenter);
             discomfortText.text = "DISCOMFORT 0 / 100";
+            EnsureTextOutline(discomfortText);
 
             Slider discomfortSlider = EnsureDiscomfortSlider(canvasObject.transform);
             Text gameOverText = EnsureUiText(
@@ -651,6 +652,8 @@ namespace Nyoice.Editor
                 TextAnchor.MiddleCenter);
             gameOverText.text = "GAME OVER";
             gameOverText.color = new Color(1f, 0.25f, 0.2f);
+            EnsureTextOutline(gameOverText);
+            gameOverText.transform.SetAsLastSibling();
             gameOverText.gameObject.SetActive(gameStateManager.IsGameOver);
 
             DiscomfortUI ui = GetOrAddComponent<DiscomfortUI>(canvasObject);
@@ -718,6 +721,14 @@ namespace Nyoice.Editor
             text.color = Color.white;
             text.raycastTarget = false;
             return text;
+        }
+
+        private static void EnsureTextOutline(Text text)
+        {
+            Outline outline = GetOrAddComponent<Outline>(text.gameObject);
+            outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.useGraphicAlpha = true;
         }
 
         private static GameObject GetOrCreateUiObject(Transform parent, string objectName)
