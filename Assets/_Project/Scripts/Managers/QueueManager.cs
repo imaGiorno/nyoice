@@ -32,10 +32,13 @@ namespace Nyoice.Managers
 
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
         private NPCController _decisionPointOccupant;
+        private NPCController _selectionZoneOccupant;
         private bool _hasLoggedInitializationError;
         private bool _ticketEventSubscribed;
 
         public IReadOnlyList<NPCController> InternalWaitingList => _internalWaitingList;
+        public NPCController SelectionZoneOccupant => _selectionZoneOccupant;
+        public bool IsSelectionZoneOccupied => _selectionZoneOccupant != null;
 
         private void Awake()
         {
@@ -148,6 +151,34 @@ namespace Nyoice.Managers
             CompactQueue();
         }
 
+        public bool NotifySelectionZoneCrossed(NPCController npc)
+        {
+            if (npc == null || _selectionZoneOccupant != npc)
+            {
+                return false;
+            }
+
+            _selectionZoneOccupant = null;
+            urinalManager?.EndSelection(npc);
+            LogQueueEvent($"{npc.name} released SelectionZone");
+            CompactQueue();
+            return true;
+        }
+
+        public bool TryEnterSelectionZone(NPCController npc)
+        {
+            if (npc == null || _selectionZoneOccupant != null ||
+                ticketManager == null || !ticketManager.HasTicket(npc) ||
+                urinalManager == null || !urinalManager.BeginSelection(npc))
+            {
+                return false;
+            }
+
+            _selectionZoneOccupant = npc;
+            LogQueueEvent($"{npc.name} entered SelectionZone");
+            return true;
+        }
+
         private void CompactQueue()
         {
             if (!HasValidQueueReferences())
@@ -174,6 +205,11 @@ namespace Nyoice.Managers
                 return false;
             }
 
+            if (_selectionZoneOccupant != null)
+            {
+                return false;
+            }
+
             ResolveUrinalFlowReferences();
             if (urinalManager == null || ticketManager == null ||
                 nyoiceApproachPoint == null || lineCrossingTarget == null)
@@ -183,6 +219,12 @@ namespace Nyoice.Managers
 
             if (!ticketManager.TryAcquireTicket(npc))
             {
+                return false;
+            }
+
+            if (!TryEnterSelectionZone(npc))
+            {
+                ticketManager.ReleaseTicket(npc);
                 return false;
             }
 
@@ -368,4 +410,3 @@ namespace Nyoice.Managers
         }
     }
 }
-

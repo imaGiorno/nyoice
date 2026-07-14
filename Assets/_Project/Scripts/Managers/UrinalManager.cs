@@ -26,6 +26,7 @@ namespace Nyoice.Managers
         private bool enableDebugLogs = true;
 
         public UrinalController CurrentSelection { get; private set; }
+        public NPCController ActiveSelectionNpc { get; private set; }
 
         private void Awake()
         {
@@ -47,6 +48,11 @@ namespace Nyoice.Managers
 
         private void Update()
         {
+            if (ActiveSelectionNpc == null)
+            {
+                return;
+            }
+
             if (Input.GetKeyDown(KeyCode.LeftArrow))
             {
                 MoveSelection(-1);
@@ -77,6 +83,7 @@ namespace Nyoice.Managers
             AudioSource source)
         {
             ClearSelection();
+            ActiveSelectionNpc = null;
             urinals = configuredUrinals;
             inputCamera = camera;
             audioSource = source;
@@ -105,7 +112,7 @@ namespace Nyoice.Managers
 
         public bool SelectUrinal(UrinalController urinal)
         {
-            if (urinal == null || !urinal.IsAvailable)
+            if (ActiveSelectionNpc == null || urinal == null || !urinal.IsAvailable)
             {
                 return false;
             }
@@ -123,8 +130,39 @@ namespace Nyoice.Managers
             return true;
         }
 
+        public bool BeginSelection(NPCController npc)
+        {
+            if (npc == null || (ActiveSelectionNpc != null && ActiveSelectionNpc != npc))
+            {
+                return false;
+            }
+
+            ClearSelection();
+            ActiveSelectionNpc = npc;
+            Log($"{npc.name} started urinal selection");
+            return true;
+        }
+
+        public bool EndSelection(NPCController npc)
+        {
+            if (npc == null || ActiveSelectionNpc != npc)
+            {
+                return false;
+            }
+
+            ClearSelection();
+            ActiveSelectionNpc = null;
+            Log($"{npc.name} ended urinal selection");
+            return true;
+        }
+
         public UrinalController ConfirmSelection(NPCController npc)
         {
+            if (npc == null || ActiveSelectionNpc != npc)
+            {
+                return null;
+            }
+
             UrinalController selected = CurrentSelection;
             if (selected == null || !selected.IsAvailable)
             {
@@ -258,4 +296,3 @@ namespace Nyoice.Managers
         }
     }
 }
-

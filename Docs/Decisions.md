@@ -1,14 +1,3 @@
-# Sprint 4 decisions
-
-- A ticket is owned by an NPC rather than represented only by a counter. This prevents double acquisition and double release.
-- Queue entry remains fixed at Queue08. The DecisionPoint occupant leaves only after ticket acquisition succeeds.
-- The current urinal selection is global. It may change until an NPC crosses NyoiceLine.
-- Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
-- The destination is immutable after `UrinalController.Reserve()` succeeds.
-- A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.
-- A generated in-memory audio clip provides a selection sound without an external asset.
-- Package-free Editor validators are used because no test package may be added.
-
 # Decisions
 
 ## D-001: プロジェクト固有Assetを`Assets/_Project`へ集約する
@@ -78,3 +67,14 @@
 - 復旧: 参照が欠損していれば`GameStage/Queue`以下の固定名からQueue01〜Queue08を順番に再取得する。
 - 失敗時: Queue構成を復旧できない場合はNPCSpawnerを停止し、NPCをSpawnPointへ生成し続けない。
 - 理由: Sceneのシリアライズ参照欠損を、全NPCが内部待機扱いになる挙動へ暗黙変換しないため。
+# Sprint 4 decisions
+
+- A ticket is owned by an NPC rather than represented only by a counter. This prevents double acquisition and double release.
+- Queue entry remains fixed at Queue08. The DecisionPoint occupant leaves only after ticket acquisition succeeds.
+- The current urinal selection belongs exclusively to the one NPC occupying SelectionZone. It may change until that NPC crosses NyoiceLine.
+- UrinalTicket limits total admission to eight, while QueueManager independently limits SelectionZone to one occupant.
+- Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
+- The destination is immutable after `UrinalController.Reserve()` succeeds.
+- A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.
+- A generated in-memory audio clip provides a selection sound without an external asset.
+- Package-free Editor validators are used because no test package may be added.

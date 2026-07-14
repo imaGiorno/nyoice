@@ -107,6 +107,7 @@ namespace Nyoice.NPC
             }
 
             TargetUrinal = confirmedUrinal;
+            _queueManager?.NotifySelectionZoneCrossed(this);
             SetState(NPCState.WalkingToUrinal);
             Log($"{name} moving to Urinal{TargetUrinal.UrinalNumber:00} MovePoint");
             _movement.MoveTo(TargetUrinal.MovePoint.position, HandleMovePointReached);
@@ -232,4 +233,3 @@ namespace Nyoice.NPC
         }
     }
 }
-

@@ -23,6 +23,7 @@ namespace Nyoice.Editor
             {
                 ValidateTicketLimits(root.transform);
                 ValidateUrinalSelectionAndFlow(root.transform);
+                ValidateSelectionZoneSerialization(root.transform);
                 Debug.Log("Sprint 4 urinal flow validation passed.");
             }
             finally
@@ -76,6 +77,9 @@ namespace Nyoice.Editor
             manager.transform.SetParent(root, false);
             manager.Configure(urinals, null, null);
 
+            NPCController selectionNpc = CreateNpc(root, "SelectionNPC");
+            Require(manager.BeginSelection(selectionNpc), "Selection session did not start.");
+
             IReadOnlyList<UrinalController> available = manager.GetAvailableByPriority();
             Require(available.Count == 8, "The available urinal count is not eight.");
             for (int index = 0; index < available.Count; index++)
@@ -89,11 +93,14 @@ namespace Nyoice.Editor
             Require(CountActiveHighlights(urinals) == 1, "More than one highlight is active.");
 
             NPCController reservationNpc = CreateNpc(root, "ReservationNPC");
+            Require(manager.EndSelection(selectionNpc), "Initial selection session did not end.");
+            Require(manager.BeginSelection(reservationNpc), "Reservation selection session did not start.");
             manager.SelectUrinal(urinals[7]);
             UrinalController reserved = manager.ConfirmSelection(reservationNpc);
             Require(reserved == urinals[7], "Urinal08 was not reserved.");
             Require(reserved.State == UrinalState.Reserved, "Reserved urinal state is incorrect.");
             Require(manager.GetAutomaticSelection() == urinals[6], "Reserved Urinal08 was selected again.");
+            Require(manager.EndSelection(reservationNpc), "Reservation selection session did not end.");
             reserved.Release(reservationNpc);
 
             UrinalTicketManager flowTickets = new GameObject("FlowTicketValidation")
@@ -106,6 +113,7 @@ namespace Nyoice.Editor
             flowNpc.ConfigureUrinalFlow(manager, flowTickets);
             flowNpc.HandleDecisionPointReached();
             Require(flowTickets.TryAcquireTicket(flowNpc), "Flow NPC could not acquire a ticket.");
+            Require(manager.BeginSelection(flowNpc), "Flow NPC selection session did not start.");
 
             flowNpc.BeginUrinalApproach(new Vector3(6.2f, -3.75f, 0f), new Vector3(5.8f, -3.75f, 0f));
             Require(flowNpc.State == NPCState.ApproachingLine, "NPC did not enter ApproachingLine.");
@@ -118,6 +126,61 @@ namespace Nyoice.Editor
             UsePointReachedMethod.Invoke(flowNpc, null);
             Require(flowNpc.State == NPCState.UsingUrinal, "NPC did not enter UsingUrinal.");
             Require(urinals[7].State == UrinalState.Occupied, "Urinal did not become Occupied.");
+            Require(manager.EndSelection(flowNpc), "Flow NPC selection session did not end.");
+        }
+
+        private static void ValidateSelectionZoneSerialization(Transform root)
+        {
+            UrinalController[] urinals = CreateUrinals(root);
+            UrinalManager urinalManager = new GameObject("SelectionZoneUrinalManager")
+                .AddComponent<UrinalManager>();
+            urinalManager.transform.SetParent(root, false);
+            urinalManager.Configure(urinals, null, null);
+
+            UrinalTicketManager tickets = new GameObject("SelectionZoneTickets")
+                .AddComponent<UrinalTicketManager>();
+            tickets.transform.SetParent(root, false);
+            tickets.Configure(8);
+
+            var queueManagerObject = new GameObject("SelectionZoneQueueManager");
+            queueManagerObject.SetActive(false);
+            queueManagerObject.transform.SetParent(root, false);
+            QueueManager queueManager = queueManagerObject.AddComponent<QueueManager>();
+
+            Transform approachPoint = CreatePoint(root, "SelectionZoneApproach", Vector3.right);
+            Transform crossingTarget = CreatePoint(root, "SelectionZoneCrossing", Vector3.left);
+            queueManager.ConfigureUrinalFlow(
+                urinalManager,
+                tickets,
+                approachPoint,
+                crossingTarget);
+
+            NPCController firstNpc = CreateNpc(root, "SelectionZoneNPC_001");
+            NPCController secondNpc = CreateNpc(root, "SelectionZoneNPC_002");
+
+            firstNpc.ConfigureUrinalFlow(urinalManager, tickets);
+            secondNpc.ConfigureUrinalFlow(urinalManager, tickets);
+            Require(tickets.TryAcquireTicket(firstNpc), "First SelectionZone ticket acquisition failed.");
+            Require(tickets.TryAcquireTicket(secondNpc), "Second SelectionZone ticket acquisition failed.");
+            Require(queueManager.TryEnterSelectionZone(firstNpc), "First NPC could not occupy SelectionZone.");
+            Require(
+                !queueManager.TryEnterSelectionZone(secondNpc),
+                "Two NPCs entered SelectionZone at the same time.");
+            Require(
+                queueManager.SelectionZoneOccupant == firstNpc &&
+                urinalManager.ActiveSelectionNpc == firstNpc,
+                "SelectionZone occupant changed while occupied.");
+            Require(urinalManager.SelectUrinal(urinals[7]), "SelectionZone urinal selection failed.");
+            Require(CountActiveHighlights(urinals) == 1, "SelectionZone must have one highlight.");
+            Require(queueManager.NotifySelectionZoneCrossed(firstNpc), "First NPC did not release SelectionZone.");
+            Require(CountActiveHighlights(urinals) == 0, "Highlight remained after SelectionZone release.");
+            Require(queueManager.TryEnterSelectionZone(secondNpc), "Second NPC could not enter the released SelectionZone.");
+            Require(
+                queueManager.SelectionZoneOccupant == secondNpc &&
+                urinalManager.ActiveSelectionNpc == secondNpc,
+                "Second NPC did not become the SelectionZone occupant.");
+
+            UnityEngine.Object.DestroyImmediate(queueManager.gameObject);
         }
 
         private static UrinalController[] CreateUrinals(Transform root)
@@ -200,4 +263,3 @@ namespace Nyoice.Editor
         }
     }
 }
-
