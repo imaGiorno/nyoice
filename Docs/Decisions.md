@@ -39,3 +39,31 @@
 - 決定: Nyoiceラインを`x = 6.0`、ライン直前の`NyoiceApproachPoint`を`x = 6.2`、`Queue01`を`x = 6.5`に置き、Queue番号順に入口方向へ並べる。
 - 理由: 待機中に目的地確定ラインを越えず、先頭NPCだけが便器選択を受け付けながらライン直前へ進めるようにするため。
 - Spawn: `SpawnPoint`は`x = 10.1`とし、`Queue08`よりさらに入口側へ置く。
+
+## D-006: NPC待機列は固定8枠と内部リストで管理する
+
+- 日付: 2026-07-12
+- 状態: 採用
+- 決定: 画面上の`Queue01`〜`Queue08`を`QueueSlot`として管理し、満員時は`List<NPCController>`へ生成順に保持する。
+- 進入: 新規NPCは空いている最も大きいQueue番号へ入り、最初の空きが発生するたびに1つ前へ進む。
+- 先頭: `Queue01`到着後は`DecisionPoint`へ移動し、便器選択待ちとして停止する。
+- 移動: NavMeshやTween Packageを使わず、`Vector3.MoveTowards`で移動する。
+- Prefab: Runtimeコンポーネントを持つルートと見た目の`Visual`子を分け、後から素材だけを差し替え可能にする。
+
+## D-007: 内部待機NPCは生成済みのまま非表示にする
+
+- 日付: 2026-07-12
+- 状態: 採用
+- 決定: 画面上のNPCをDecisionPointを含め最大8人とし、9人目以降はRendererとColliderを無効化して内部待機リストへ保持する。
+- 表示責務: 全子孫のRendererとColliderの切り替えは`NPCController`だけが担当する。
+- 復帰: 表示枠とQueueSlotが空いた時点で、内部待機NPCを表示状態へ戻してSpawnPointからQueueへ移動させる。
+- 非採用: Sprint 3 MVPではObject Poolを導入せず、生成済みNPCを再利用する。
+
+## D-008: Queue参照はSetup保存とRuntime検証を併用する
+
+- 日付: 2026-07-13
+- 状態: 採用
+- 決定: SetupがQueueSlot配列を明示的にDirty保存し、QueueManagerがAwake時に8枠とDecisionPointを検証する。
+- 復旧: 参照が欠損していれば`GameStage/Queue`以下の固定名からQueue01〜Queue08を順番に再取得する。
+- 失敗時: Queue構成を復旧できない場合はNPCSpawnerを停止し、NPCをSpawnPointへ生成し続けない。
+- 理由: Sceneのシリアライズ参照欠損を、全NPCが内部待機扱いになる挙動へ暗黙変換しないため。
