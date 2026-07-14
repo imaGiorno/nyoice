@@ -1,3 +1,14 @@
+# Sprint 4 decisions
+
+- A ticket is owned by an NPC rather than represented only by a counter. This prevents double acquisition and double release.
+- Queue entry remains fixed at Queue08. The DecisionPoint occupant leaves only after ticket acquisition succeeds.
+- The current urinal selection is global. It may change until an NPC crosses NyoiceLine.
+- Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
+- The destination is immutable after `UrinalController.Reserve()` succeeds.
+- A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.
+- A generated in-memory audio clip provides a selection sound without an external asset.
+- Package-free Editor validators are used because no test package may be added.
+
 # Decisions
 
 ## D-001: プロジェクト固有Assetを`Assets/_Project`へ集約する

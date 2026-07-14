@@ -1,3 +1,20 @@
+# Sprint 4 urinal flow
+
+Sprint 4 adds a state-driven path from the queue front to a urinal.
+
+- `QueueManager` keeps the Sprint 3 queue compact and releases the DecisionPoint only after a ticket is acquired.
+- `UrinalTicketManager` owns eight NPC-specific tickets and rejects duplicate acquisition or release.
+- `UrinalManager` owns the current player selection, keyboard and pointer input, right-first fallback selection, and reservation confirmation.
+- `UrinalController` owns one urinal's number, state, waypoints, renderer, and highlight.
+- `NPCController` owns the explicit `NPCState` transition from `Queue` through `UsingUrinal`.
+- `NyoiceLine` is the trigger boundary that confirms the selected urinal.
+
+The runtime flow is:
+
+`Queue -> FrontWaiting -> ApproachingLine -> CrossingLine -> WalkingToUrinal -> UsingUrinal`
+
+Tickets are released through `NPCController.ReleaseUrinalTicket()`. Sprint 4 exposes this entry point but does not start the exit flow.
+
 # Architecture
 
 ## 目的
