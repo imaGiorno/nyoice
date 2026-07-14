@@ -10,7 +10,7 @@ using UnityEngine.SceneManagement;
 namespace Nyoice.Editor
 {
     /// <summary>
-    /// Generates the Sprint 2 GameStage foundation in GameScene.
+    /// Creates and updates the Unity-only foundation used by the Nyoice game scene.
     /// </summary>
     public static class NyoiceGameStageSetup
     {
@@ -18,15 +18,16 @@ namespace Nyoice.Editor
         private const string GameScenePath = "Assets/_Project/Scenes/GameScene.unity";
         private const string NpcPrefabPath = "Assets/_Project/Prefabs/NPC.prefab";
         private const string GameStageName = "GameStage";
-        private const int UrinalCount = 8;
 
+        private const int UrinalCount = 8;
         private const float UrinalStartX = -5.25f;
         private const float UrinalSpacing = 1.5f;
         private const float UrinalY = 3.25f;
         private const float StageBottomY = -4.75f;
+
         private const float NyoiceLineX = 6f;
-        private const float DecisionPointX = 6.5f;
         private const float NyoiceApproachX = 6.2f;
+        private const float DecisionPointX = 6.5f;
         private const float QueueLaneX = 7f;
         private const float QueueStartY = -3.75f;
         private const float QueueSpacingY = 1f;
@@ -40,7 +41,7 @@ namespace Nyoice.Editor
         {
             if (!File.Exists(GameScenePath))
             {
-                Warn("GameScene縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲ょ・縺ｫ Nyoice > Setup Sprint 1 繧貞ｮ溯｡後＠縺ｦ縺上□縺輔＞縲・);
+                Warn("GameScene was not found. Run Nyoice/Setup Sprint 1 first.");
                 return;
             }
 
@@ -50,15 +51,15 @@ namespace Nyoice.Editor
             }
 
             Scene gameScene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
-            NPCController npcPrefab = CreateNpcPrefab();
-            GameObject existingGameStage = GameObject.Find(GameStageName);
-            if (existingGameStage != null)
+            NPCController npcPrefab = CreateOrUpdateNpcPrefab();
+            GameObject existingStage = GameObject.Find(GameStageName);
+
+            if (existingStage != null)
             {
-                UpdateExistingQueueLayout(existingGameStage.transform);
-                AssetDatabase.SaveAssets();
-                EditorSceneManager.MarkSceneDirty(gameScene);
-                EditorSceneManager.SaveScene(gameScene);
-                Warn("NPC.prefab縺ｨQueue驟咲ｽｮ繧呈怙譁ｰ蛹悶＠縺ｾ縺励◆縲・ameStage縺ｮ驥崎､・函謌舌・陦後▲縺ｦ縺・∪縺帙ｓ縲・);
+                UpdateExistingQueueLayout(existingStage.transform);
+                SaveSceneAndAssets(gameScene);
+                Selection.activeGameObject = existingStage;
+                Warn("NPC.prefab and the queue layout were updated. GameStage was not duplicated.");
                 return;
             }
 
@@ -82,22 +83,18 @@ namespace Nyoice.Editor
             EnsureSceneCamera();
             EnsureSceneLight();
 
-            AssetDatabase.SaveAssets();
-            EditorSceneManager.MarkSceneDirty(gameScene);
-            EditorSceneManager.SaveScene(gameScene);
+            SaveSceneAndAssets(gameScene);
             Selection.activeGameObject = gameStage;
-
-            Info("GameStage繧竪ameScene縺ｸ逕滓・縺励∪縺励◆縲・);
+            Info("GameStage was created in GameScene.");
         }
 
         private static void CreateUrinals(Transform parent)
         {
             for (int index = 0; index < UrinalCount; index++)
             {
-                string number = (index + 1).ToString("00");
+                int number = index + 1;
                 float x = GetUrinalX(index);
-
-                GameObject urinal = new GameObject($"Urinal{number}");
+                var urinal = new GameObject($"Urinal{number:00}");
                 urinal.transform.SetParent(parent, false);
                 urinal.transform.position = new Vector3(x, UrinalY, 0f);
 
@@ -109,7 +106,7 @@ namespace Nyoice.Editor
                     new Color(0.82f, 0.88f, 0.92f));
                 body.GetComponent<BoxCollider>().isTrigger = false;
 
-                CreateNumberLabel(urinal.transform, index + 1);
+                CreateNumberLabel(urinal.transform, number);
             }
         }
 
@@ -192,51 +189,10 @@ namespace Nyoice.Editor
             return slots;
         }
 
-        private static void UpdateExistingQueueLayout(Transform gameStage)
-        {
-            Transform queue = gameStage.Find("Queue");
-            Transform entrance = gameStage.Find("Entrance");
-            if (queue == null || entrance == null)
-            {
-                Debug.LogError("Existing GameStage is missing Queue or Entrance.");
-                return;
-            }
-
-            SetExistingPointPosition(queue, "DecisionPoint", new Vector3(DecisionPointX, QueueStartY, 0f));
-            SetExistingPointPosition(queue, "NyoiceApproachPoint", new Vector3(NyoiceApproachX, QueueStartY, 0f));
-
-            for (int index = 0; index < UrinalCount; index++)
-            {
-                SetExistingPointPosition(queue, $"Queue{index + 1:00}", GetQueuePosition(index));
-            }
-
-            SetExistingPointPosition(entrance, "SpawnPoint", new Vector3(QueueLaneX, SpawnPointY, 0f));
-            SetExistingPointPosition(entrance, "EntranceMarker", new Vector3(QueueLaneX, 5f, 0f));
-        }
-
-        private static void SetExistingPointPosition(Transform parent, string childName, Vector3 position)
-        {
-            Transform point = parent.Find(childName);
-            if (point == null)
-            {
-                Debug.LogError($"Existing GameStage is missing {parent.name}/{childName}.");
-                return;
-            }
-
-            point.position = position;
-            EditorUtility.SetDirty(point);
-        }
-
-        private static Vector3 GetQueuePosition(int index)
-        {
-            return new Vector3(QueueLaneX, QueueStartY + (index * QueueSpacingY), 0f);
-        }
-
         private static void CreateNyoiceLine(Transform parent)
         {
             float height = UrinalY - StageBottomY;
             float centerY = StageBottomY + (height * 0.5f);
-
             GameObject line = CreateCube(
                 "Line",
                 parent,
@@ -256,7 +212,6 @@ namespace Nyoice.Editor
                 new Vector3(-6.5f, -3.75f, 0f),
                 new Vector3(0.25f, 2f, 0.25f),
                 new Color(0.3f, 0.55f, 0.9f));
-
             CreatePoint("ExitPoint", parent, new Vector3(-5.75f, -3.75f, 0f), Color.cyan);
         }
 
@@ -264,17 +219,15 @@ namespace Nyoice.Editor
         {
             for (int index = 0; index < UrinalCount; index++)
             {
-                string urinalName = $"Urinal{index + 1:00}";
                 float x = GetUrinalX(index);
-                Transform urinalWaypoints = CreateGroup(urinalName, parent);
-
+                Transform urinalWaypoints = CreateGroup($"Urinal{index + 1:00}", parent);
                 CreatePoint("MovePoint", urinalWaypoints, new Vector3(x, 1.35f, 0f), Color.yellow);
                 CreatePoint("UsePoint", urinalWaypoints, new Vector3(x, 2.45f, 0f), Color.magenta);
                 CreatePoint("ExitStartPoint", urinalWaypoints, new Vector3(x - 0.45f, 1.35f, 0f), Color.cyan);
             }
         }
 
-        private static NPCController CreateNpcPrefab()
+        private static NPCController CreateOrUpdateNpcPrefab()
         {
             GameObject existingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>(NpcPrefabPath);
             if (existingPrefab != null)
@@ -294,11 +247,11 @@ namespace Nyoice.Editor
                 return updatedPrefab.GetComponent<NPCController>();
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(NpcPrefabPath));
+            string prefabDirectory = Path.GetDirectoryName(NpcPrefabPath);
+            Directory.CreateDirectory(prefabDirectory);
 
             var npcRoot = new GameObject("NPC");
             ConfigureNpcPrefab(npcRoot);
-
             PrefabUtility.SaveAsPrefabAsset(npcRoot, NpcPrefabPath);
             Object.DestroyImmediate(npcRoot);
 
@@ -354,6 +307,41 @@ namespace Nyoice.Editor
             EditorUtility.SetDirty(spawner);
         }
 
+        private static void UpdateExistingQueueLayout(Transform gameStage)
+        {
+            Transform queue = gameStage.Find("Queue");
+            Transform entrance = gameStage.Find("Entrance");
+            if (queue == null || entrance == null)
+            {
+                Debug.LogError("Existing GameStage is missing Queue or Entrance.");
+                return;
+            }
+
+            SetExistingPointPosition(queue, "DecisionPoint", new Vector3(DecisionPointX, QueueStartY, 0f));
+            SetExistingPointPosition(queue, "NyoiceApproachPoint", new Vector3(NyoiceApproachX, QueueStartY, 0f));
+
+            for (int index = 0; index < UrinalCount; index++)
+            {
+                SetExistingPointPosition(queue, $"Queue{index + 1:00}", GetQueuePosition(index));
+            }
+
+            SetExistingPointPosition(entrance, "SpawnPoint", new Vector3(QueueLaneX, SpawnPointY, 0f));
+            SetExistingPointPosition(entrance, "EntranceMarker", new Vector3(QueueLaneX, 5f, 0f));
+        }
+
+        private static void SetExistingPointPosition(Transform parent, string childName, Vector3 position)
+        {
+            Transform point = parent.Find(childName);
+            if (point == null)
+            {
+                Debug.LogError($"Existing GameStage is missing {parent.name}/{childName}.");
+                return;
+            }
+
+            point.position = position;
+            EditorUtility.SetDirty(point);
+        }
+
         private static Transform CreateGroup(string name, Transform parent)
         {
             var group = new GameObject(name);
@@ -382,6 +370,11 @@ namespace Nyoice.Editor
             return cube;
         }
 
+        private static Vector3 GetQueuePosition(int index)
+        {
+            return new Vector3(QueueLaneX, QueueStartY + (index * QueueSpacingY), 0f);
+        }
+
         private static float GetUrinalX(int index)
         {
             return UrinalStartX + (index * UrinalSpacing);
@@ -407,7 +400,7 @@ namespace Nyoice.Editor
 
         private static void EnsureSceneLight()
         {
-            if (Object.FindFirstObjectByType<Light>() != null)
+            if (Object.FindAnyObjectByType<Light>() != null)
             {
                 return;
             }
@@ -417,6 +410,13 @@ namespace Nyoice.Editor
             Light light = lightObject.GetComponent<Light>();
             light.type = LightType.Directional;
             light.intensity = 1.2f;
+        }
+
+        private static void SaveSceneAndAssets(Scene scene)
+        {
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.MarkSceneDirty(scene);
+            EditorSceneManager.SaveScene(scene);
         }
 
         private static void Warn(string message)
