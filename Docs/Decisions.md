@@ -84,3 +84,12 @@
 - A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.
 - A generated in-memory audio clip provides a selection sound without an external asset.
 - Package-free Editor validators are used because no test package may be added.
+
+## Sprint 5-2 decisions
+
+- Urinal release and UrinalTicket return occur together when movement from UsePoint to ExitStartPoint begins. ExitStartPoint arrival is intentionally too late for either release.
+- `UrinalController.Release(NPCController)` returns a boolean and changes state only when the caller is the current reserver or user. Duplicate and foreign releases are harmless.
+- The per-urinal `ExitStartPoint` reference belongs to `UrinalController`; the shared `ExitPoint` reference belongs to `QueueManager` and is copied to each enqueued NPC.
+- `TicketReleased` remains the single signal that retries a FrontWaiting DecisionPoint NPC. No second queue progression path is introduced for exits.
+- NPC destruction is scheduled only after the guarded `Leaving -> Finished` transition at ExitPoint. An Editor-only validation flag makes this observable without immediate Play Mode destruction.
+- Object pooling remains deferred. Completed NPC GameObjects are destroyed after reaching ExitPoint.

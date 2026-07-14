@@ -28,6 +28,9 @@ namespace Nyoice.Managers
         private Transform lineCrossingTarget;
 
         [SerializeField]
+        private Transform exitPoint;
+
+        [SerializeField]
         private bool enableQueueDebugLogs = true;
 
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
@@ -72,10 +75,16 @@ namespace Nyoice.Managers
             SubscribeToTicketManager();
         }
 
+        public void ConfigureExitFlow(Transform configuredExitPoint)
+        {
+            exitPoint = configuredExitPoint;
+        }
+
         public void Enqueue(NPCController npc)
         {
             npc.Initialize(this);
             npc.ConfigureUrinalFlow(urinalManager, ticketManager);
+            npc.ConfigureExitFlow(exitPoint);
             npc.WaitInternally();
             _internalWaitingList.Add(npc);
 
@@ -326,6 +335,12 @@ namespace Nyoice.Managers
             {
                 GameObject point = GameObject.Find("GameStage/NyoiceLine/CrossingTarget");
                 lineCrossingTarget = point != null ? point.transform : null;
+            }
+
+            if (exitPoint == null)
+            {
+                GameObject point = GameObject.Find("GameStage/Exit/ExitPoint");
+                exitPoint = point != null ? point.transform : null;
             }
 
             SubscribeToTicketManager();

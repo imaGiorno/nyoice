@@ -94,3 +94,15 @@ Each urinal Body is fixed at local `(0, 0, 0)` beneath its `UrinalXX` root. Setu
 Sprint 5-1 extends the NPC flow to `WalkingToUrinal -> UsingUrinal -> ReadyToLeave`. `NPCController` owns a serialized three-second urination Coroutine. Completion changes only the NPC state: the urinal remains Occupied, the NPC remains at UsePoint, and its UrinalTicket remains held.
 
 Tickets are released through `NPCController.ReleaseUrinalTicket()`. Sprint 4 exposes this entry point but does not start the exit flow.
+
+## Sprint 5-2 exit flow
+
+Sprint 5-2 completes the first reusable NPC lifecycle:
+
+`UsingUrinal -> ReadyToLeave -> Leaving -> Finished`
+
+`NPCController` starts leaving once urination completes and all exit references are valid. At the transition from `ReadyToLeave` to `Leaving`, it releases the occupied `UrinalController` and the NPC-owned ticket before moving. The route is the selected urinal's `ExitStartPoint`, followed by the shared `GameStage/Exit/ExitPoint`. The NPC is marked `Finished` and destroyed after reaching the shared exit.
+
+Each `UrinalController` stores its own `ExitStartPoint`. `QueueManager` stores the shared `ExitPoint` and configures every newly enqueued NPC with it. Setup repairs both references on existing GameStages. The existing `TicketReleased` subscription immediately retries the DecisionPoint occupant, so a returned ticket can advance the next NPC into SelectionZone in the same frame.
+
+Leaving uses guarded one-shot transitions. Urinal release, ticket release, ExitStart arrival, ExitPoint arrival, and destruction scheduling each ignore duplicate notifications. Disabled or destroyed NPCs clear their movement callback and active Coroutines.

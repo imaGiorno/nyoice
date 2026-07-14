@@ -18,6 +18,7 @@ namespace Nyoice.NPC
         private Action _onArrived;
 
         public bool IsMoving { get; private set; }
+        public Vector3 TargetPosition => _targetPosition;
 
         public void MoveTo(Vector3 targetPosition, Action onArrived)
         {
@@ -59,4 +60,3 @@ namespace Nyoice.NPC
         }
     }
 }
-
