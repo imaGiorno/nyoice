@@ -34,6 +34,8 @@ namespace Nyoice.Toilet
         public Transform UsePoint => usePoint;
         public NPCController ReservedBy { get; private set; }
         public bool IsAvailable => state == UrinalState.Available;
+        public bool IsOccupied => state == UrinalState.Occupied;
+        public NPCController CurrentUser => IsOccupied ? ReservedBy : null;
         public bool IsSelected => highlight != null && highlight.activeSelf;
         public GameObject Highlight => highlight;
         public Renderer BodyRenderer => bodyRenderer;
