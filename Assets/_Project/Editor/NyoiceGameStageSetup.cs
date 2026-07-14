@@ -31,6 +31,8 @@ namespace Nyoice.Editor
         private const float NyoiceLineX = 6f;
         private const float CrossingTargetX = 5.8f;
         private const float SpawnPointY = 4.5f;
+        private const float NpcMovementSpeed = 4f;
+        private const float NpcUrinationDurationSeconds = 6f;
 
         private static readonly Vector3 UrinalBodyScale = new Vector3(1f, 1.2f, 0.5f);
         private static readonly Vector3 NpcVisualScale = new Vector3(0.12f, 0.45f, 0.3f);
@@ -780,10 +782,14 @@ namespace Nyoice.Editor
 
         private static void ConfigureNpcPrefab(GameObject npcRoot)
         {
-            if (npcRoot.GetComponent<NPCMovement>() == null)
+            NPCMovement npcMovement = npcRoot.GetComponent<NPCMovement>();
+            if (npcMovement == null)
             {
-                npcRoot.AddComponent<NPCMovement>();
+                npcMovement = npcRoot.AddComponent<NPCMovement>();
             }
+
+            npcMovement.ConfigureSpeed(NpcMovementSpeed);
+            EditorUtility.SetDirty(npcMovement);
 
             NPCController npcController = npcRoot.GetComponent<NPCController>();
             if (npcController == null)
@@ -791,7 +797,7 @@ namespace Nyoice.Editor
                 npcController = npcRoot.AddComponent<NPCController>();
             }
 
-            npcController.ConfigureUrinationDuration(3f);
+            npcController.ConfigureUrinationDuration(NpcUrinationDurationSeconds);
             EditorUtility.SetDirty(npcController);
 
             Rigidbody body = npcRoot.GetComponent<Rigidbody>();

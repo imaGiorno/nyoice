@@ -77,7 +77,7 @@
 - Selection input receives a two-second default pause at NyoiceApproachPoint so pointer and keyboard choices are observable before line crossing.
 - The selected urinal uses an unlit yellow four-sided frame in front of the Body instead of relying on subtle emission.
 - Urinal Body and Highlight placement uses local transforms only. Existing Highlights are deleted and rebuilt on every setup run so malformed scene children are repaired without replacing GameStage.
-- Urination duration belongs to each NPC and defaults to three seconds. `ReadyToLeave` represents completed use without implying urinal release, Ticket return, or exit movement.
+- Urination duration belongs to each NPC and defaults to six seconds after Sprint 5-3A timing validation. `ReadyToLeave` represents completed use without implying urinal release, Ticket return, or exit movement.
 - Urinal release and Ticket return are deferred until movement from UsePoint to ExitStartPoint begins in Sprint 5-2.
 - Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
 - The destination is immutable after `UrinalController.Reserve()` succeeds.
@@ -102,3 +102,4 @@
 - Discomfort is frame-rate independent: pair count is multiplied by the serialized per-pair rate and `Time.deltaTime`.
 - GameOver is one-shot and clamps discomfort to 100 before notifying listeners. The UI receives both value and state events so `100 / 100` and `GAME OVER` remain synchronized.
 - The status HUD uses standard uGUI and the built-in legacy runtime font. No external font, asset, package, IMGUI, or restart control is introduced.
+- NPC movement defaults to 4.0 units per second and urination to six seconds. This creates a visible Occupied overlap without changing queue, line, urinal, MovePoint, or UsePoint coordinates.

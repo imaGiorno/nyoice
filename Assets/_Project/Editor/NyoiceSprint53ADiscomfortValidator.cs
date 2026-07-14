@@ -41,6 +41,14 @@ namespace Nyoice.Editor
             discomfortManager.Configure(urinals, gameStateManager);
             discomfortManager.ConfigureRate(10f);
 
+            NPCController timingNpc = CreateNpc(root, "TimingNPC");
+            Require(
+                Mathf.Approximately(timingNpc.GetComponent<NPCMovement>().Speed, 4f),
+                "Default NPC movement speed is not 4.0.");
+            Require(
+                Mathf.Approximately(timingNpc.UrinationDurationSeconds, 6f),
+                "Default urination duration is not six seconds.");
+
             Require(
                 Mathf.Approximately(discomfortManager.CurrentDiscomfort, 0f),
                 "Initial discomfort is not zero.");
@@ -64,6 +72,15 @@ namespace Nyoice.Editor
             Require(
                 Mathf.Approximately(discomfortManager.CurrentDiscomfort, 10f),
                 "One pair did not add ten points in one second.");
+
+            float beforeTwoSecondOverlap = discomfortManager.CurrentDiscomfort;
+            discomfortManager.AdvanceTime(2f);
+            Require(discomfortManager.CountAdjacentPairs() == 1, "One pair did not remain active for two seconds.");
+            Require(
+                Mathf.Approximately(
+                    discomfortManager.CurrentDiscomfort - beforeTwoSecondOverlap,
+                    20f),
+                "Two seconds of one-pair overlap did not add twenty points.");
 
             Require(urinals[1].Release(secondNpc), "Urinal02 could not be released.");
             float beforeResolvedAdvance = discomfortManager.CurrentDiscomfort;

@@ -16,7 +16,7 @@ namespace Nyoice.NPC
         private float selectionWaitSeconds = 2f;
 
         [SerializeField, Min(0.1f)]
-        private float urinationDurationSeconds = 3f;
+        private float urinationDurationSeconds = 6f;
 
         private NPCMovement _movement;
         private QueueManager _queueManager;
