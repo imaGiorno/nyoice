@@ -27,6 +27,12 @@ namespace Nyoice.NPC
             enabled = true;
         }
 
+        public void Stop()
+        {
+            IsMoving = false;
+            _onArrived = null;
+        }
+
         private void Update()
         {
             if (!IsMoving)
@@ -53,3 +59,4 @@ namespace Nyoice.NPC
         }
     }
 }
+

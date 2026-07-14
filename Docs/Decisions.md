@@ -67,3 +67,18 @@
 - 復旧: 参照が欠損していれば`GameStage/Queue`以下の固定名からQueue01〜Queue08を順番に再取得する。
 - 失敗時: Queue構成を復旧できない場合はNPCSpawnerを停止し、NPCをSpawnPointへ生成し続けない。
 - 理由: Sceneのシリアライズ参照欠損を、全NPCが内部待機扱いになる挙動へ暗黙変換しないため。
+# Sprint 4 decisions
+
+- A ticket is owned by an NPC rather than represented only by a counter. This prevents double acquisition and double release.
+- Queue entry remains fixed at Queue08. The DecisionPoint occupant leaves only after ticket acquisition succeeds.
+- The current urinal selection belongs exclusively to the one NPC occupying SelectionZone. It may change until that NPC crosses NyoiceLine.
+- UrinalTicket limits total admission to eight, while QueueManager independently limits SelectionZone to one occupant.
+- The eight-NPC display cap uses a unique set across SelectionZone, DecisionPoint, and QueueSlots so transition overlap cannot double-count an NPC.
+- Selection input receives a two-second default pause at NyoiceApproachPoint so pointer and keyboard choices are observable before line crossing.
+- The selected urinal uses an unlit yellow four-sided frame in front of the Body instead of relying on subtle emission.
+- Urinal Body and Highlight placement uses local transforms only. Existing Highlights are deleted and rebuilt on every setup run so malformed scene children are repaired without replacing GameStage.
+- Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
+- The destination is immutable after `UrinalController.Reserve()` succeeds.
+- A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.
+- A generated in-memory audio clip provides a selection sound without an external asset.
+- Package-free Editor validators are used because no test package may be added.

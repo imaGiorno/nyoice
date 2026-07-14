@@ -72,7 +72,7 @@ namespace Nyoice.Managers
         {
             if (queueManager == null)
             {
-                queueManager = FindFirstObjectByType<QueueManager>();
+                queueManager = FindAnyObjectByType<QueueManager>();
             }
 
             if (spawnPoint == null)

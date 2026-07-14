@@ -4,9 +4,6 @@ using UnityEngine;
 
 namespace Nyoice.Managers
 {
-    /// <summary>
-    /// Owns the eight visible queue slots and the unlimited internal waiting list.
-    /// </summary>
     [DisallowMultipleComponent]
     public sealed class QueueManager : MonoBehaviour
     {
@@ -19,17 +16,40 @@ namespace Nyoice.Managers
         private Transform decisionPoint;
 
         [SerializeField]
+        private UrinalManager urinalManager;
+
+        [SerializeField]
+        private UrinalTicketManager ticketManager;
+
+        [SerializeField]
+        private Transform nyoiceApproachPoint;
+
+        [SerializeField]
+        private Transform lineCrossingTarget;
+
+        [SerializeField]
         private bool enableQueueDebugLogs = true;
 
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
         private NPCController _decisionPointOccupant;
+        private NPCController _selectionZoneOccupant;
         private bool _hasLoggedInitializationError;
+        private bool _ticketEventSubscribed;
 
         public IReadOnlyList<NPCController> InternalWaitingList => _internalWaitingList;
+        public NPCController SelectionZoneOccupant => _selectionZoneOccupant;
+        public bool IsSelectionZoneOccupied => _selectionZoneOccupant != null;
+        public int VisibleNpcCount => GetVisibleNpcCount();
 
         private void Awake()
         {
             EnsureRuntimeReferences();
+            ResolveUrinalFlowReferences();
+        }
+
+        private void OnDestroy()
+        {
+            UnsubscribeFromTicketManager();
         }
 
         public void Configure(QueueSlot[] slots, Transform decisionPointTransform)
@@ -38,14 +58,30 @@ namespace Nyoice.Managers
             decisionPoint = decisionPointTransform;
         }
 
+        public void ConfigureUrinalFlow(
+            UrinalManager configuredUrinalManager,
+            UrinalTicketManager configuredTicketManager,
+            Transform approachPoint,
+            Transform crossingTarget)
+        {
+            UnsubscribeFromTicketManager();
+            urinalManager = configuredUrinalManager;
+            ticketManager = configuredTicketManager;
+            nyoiceApproachPoint = approachPoint;
+            lineCrossingTarget = crossingTarget;
+            SubscribeToTicketManager();
+        }
+
         public void Enqueue(NPCController npc)
         {
             npc.Initialize(this);
+            npc.ConfigureUrinalFlow(urinalManager, ticketManager);
             npc.WaitInternally();
             _internalWaitingList.Add(npc);
 
             if (EnsureRuntimeReferences())
             {
+                ResolveUrinalFlowReferences();
                 CompactQueue();
             }
         }
@@ -94,15 +130,8 @@ namespace Nyoice.Managers
 
             queueSlots = resolvedSlots;
             decisionPoint = resolvedDecisionPoint;
-
-            if (!HasValidQueueReferences())
-            {
-                LogInitializationError("QueueManager failed to resolve its QueueSlots or DecisionPoint.");
-                return false;
-            }
-
             _hasLoggedInitializationError = false;
-            return true;
+            return HasValidQueueReferences();
         }
 
         public void NotifyQueueSlotReached(NPCController npc)
@@ -119,7 +148,36 @@ namespace Nyoice.Managers
         public void NotifyDecisionPointReached(NPCController npc)
         {
             LogQueueEvent($"{npc.name} reached DecisionPoint");
+            TryStartFrontWaitingNpc();
             CompactQueue();
+        }
+
+        public bool NotifySelectionZoneCrossed(NPCController npc)
+        {
+            if (npc == null || _selectionZoneOccupant != npc)
+            {
+                return false;
+            }
+
+            _selectionZoneOccupant = null;
+            urinalManager?.EndSelection(npc);
+            LogQueueEvent($"{npc.name} released SelectionZone");
+            CompactQueue();
+            return true;
+        }
+
+        public bool TryEnterSelectionZone(NPCController npc)
+        {
+            if (npc == null || _selectionZoneOccupant != null ||
+                ticketManager == null || !ticketManager.HasTicket(npc) ||
+                urinalManager == null || !urinalManager.BeginSelection(npc))
+            {
+                return false;
+            }
+
+            _selectionZoneOccupant = npc;
+            LogQueueEvent($"{npc.name} entered SelectionZone");
+            return true;
         }
 
         private void CompactQueue()
@@ -129,6 +187,7 @@ namespace Nyoice.Managers
                 return;
             }
 
+            TryStartFrontWaitingNpc();
             TryMoveToDecisionPoint();
 
             for (int sourceIndex = 1; sourceIndex < queueSlots.Length; sourceIndex++)
@@ -137,6 +196,43 @@ namespace Nyoice.Managers
             }
 
             TryAdmitInternalWaiter();
+        }
+
+        private bool TryStartFrontWaitingNpc()
+        {
+            NPCController npc = _decisionPointOccupant;
+            if (npc == null || npc.State != NPCState.FrontWaiting)
+            {
+                return false;
+            }
+
+            if (_selectionZoneOccupant != null)
+            {
+                return false;
+            }
+
+            ResolveUrinalFlowReferences();
+            if (urinalManager == null || ticketManager == null ||
+                nyoiceApproachPoint == null || lineCrossingTarget == null)
+            {
+                return false;
+            }
+
+            if (!ticketManager.TryAcquireTicket(npc))
+            {
+                return false;
+            }
+
+            if (!TryEnterSelectionZone(npc))
+            {
+                ticketManager.ReleaseTicket(npc);
+                return false;
+            }
+
+            npc.ConfigureUrinalFlow(urinalManager, ticketManager);
+            _decisionPointOccupant = null;
+            npc.BeginUrinalApproach(nyoiceApproachPoint.position, lineCrossingTarget.position);
+            return true;
         }
 
         private bool TryMoveToDecisionPoint()
@@ -208,6 +304,60 @@ namespace Nyoice.Managers
             return true;
         }
 
+        private void ResolveUrinalFlowReferences()
+        {
+            if (urinalManager == null)
+            {
+                urinalManager = FindAnyObjectByType<UrinalManager>();
+            }
+
+            if (ticketManager == null)
+            {
+                ticketManager = FindAnyObjectByType<UrinalTicketManager>();
+            }
+
+            if (nyoiceApproachPoint == null)
+            {
+                GameObject point = GameObject.Find("GameStage/Queue/NyoiceApproachPoint");
+                nyoiceApproachPoint = point != null ? point.transform : null;
+            }
+
+            if (lineCrossingTarget == null)
+            {
+                GameObject point = GameObject.Find("GameStage/NyoiceLine/CrossingTarget");
+                lineCrossingTarget = point != null ? point.transform : null;
+            }
+
+            SubscribeToTicketManager();
+        }
+
+        private void SubscribeToTicketManager()
+        {
+            if (ticketManager == null || _ticketEventSubscribed)
+            {
+                return;
+            }
+
+            ticketManager.TicketReleased += HandleTicketReleased;
+            _ticketEventSubscribed = true;
+        }
+
+        private void UnsubscribeFromTicketManager()
+        {
+            if (ticketManager != null && _ticketEventSubscribed)
+            {
+                ticketManager.TicketReleased -= HandleTicketReleased;
+            }
+
+            _ticketEventSubscribed = false;
+        }
+
+        private void HandleTicketReleased()
+        {
+            TryStartFrontWaitingNpc();
+            CompactQueue();
+        }
+
         private bool HasValidQueueReferences()
         {
             if (queueSlots == null || queueSlots.Length != MaxVisibleNpcCount || decisionPoint == null)
@@ -248,18 +398,32 @@ namespace Nyoice.Managers
 
         private int GetVisibleNpcCount()
         {
-            int visibleCount = _decisionPointOccupant != null ? 1 : 0;
+            var visibleNpcs = new HashSet<NPCController>();
+
+            if (_selectionZoneOccupant != null)
+            {
+                visibleNpcs.Add(_selectionZoneOccupant);
+            }
+
+            if (_decisionPointOccupant != null)
+            {
+                visibleNpcs.Add(_decisionPointOccupant);
+            }
+
+            if (queueSlots == null)
+            {
+                return visibleNpcs.Count;
+            }
 
             foreach (QueueSlot slot in queueSlots)
             {
-                if (slot.IsOccupied)
+                if (slot != null && slot.Occupant != null)
                 {
-                    visibleCount++;
+                    visibleNpcs.Add(slot.Occupant);
                 }
             }
 
-            return visibleCount;
+            return visibleNpcs.Count;
         }
     }
 }
-

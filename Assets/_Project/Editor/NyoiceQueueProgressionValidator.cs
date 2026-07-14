@@ -184,7 +184,7 @@ namespace Nyoice.Editor
         {
             MethodInfo method = typeof(NPCController).GetMethod(
                 methodName,
-                BindingFlags.Instance | BindingFlags.NonPublic);
+                BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
             if (method == null)
             {
                 throw new MissingMethodException(typeof(NPCController).FullName, methodName);
