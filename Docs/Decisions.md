@@ -73,6 +73,7 @@
 - Queue entry remains fixed at Queue08. The DecisionPoint occupant leaves only after ticket acquisition succeeds.
 - The current urinal selection belongs exclusively to the one NPC occupying SelectionZone. It may change until that NPC crosses NyoiceLine.
 - UrinalTicket limits total admission to eight, while QueueManager independently limits SelectionZone to one occupant.
+- The eight-NPC display cap uses a unique set across SelectionZone, DecisionPoint, and QueueSlots so transition overlap cannot double-count an NPC.
 - Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
 - The destination is immutable after `UrinalController.Reserve()` succeeds.
 - A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.

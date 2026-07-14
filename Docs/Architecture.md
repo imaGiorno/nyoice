@@ -85,4 +85,6 @@ The runtime flow is:
 
 Only one NPC may be in `ApproachingLine` or `CrossingLine` as the SelectionZone occupant. The zone is released after the urinal reservation is confirmed at NyoiceLine, while the UrinalTicket remains held until a later exit sprint.
 
+The visible waiting limit counts unique NPC references across SelectionZone, DecisionPoint, and all QueueSlots. Internal waiters remain hidden until this combined count is below eight.
+
 Tickets are released through `NPCController.ReleaseUrinalTicket()`. Sprint 4 exposes this entry point but does not start the exit flow.

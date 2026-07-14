@@ -39,6 +39,7 @@ namespace Nyoice.Managers
         public IReadOnlyList<NPCController> InternalWaitingList => _internalWaitingList;
         public NPCController SelectionZoneOccupant => _selectionZoneOccupant;
         public bool IsSelectionZoneOccupied => _selectionZoneOccupant != null;
+        public int VisibleNpcCount => GetVisibleNpcCount();
 
         private void Awake()
         {
@@ -397,16 +398,32 @@ namespace Nyoice.Managers
 
         private int GetVisibleNpcCount()
         {
-            int visibleCount = _decisionPointOccupant != null ? 1 : 0;
+            var visibleNpcs = new HashSet<NPCController>();
+
+            if (_selectionZoneOccupant != null)
+            {
+                visibleNpcs.Add(_selectionZoneOccupant);
+            }
+
+            if (_decisionPointOccupant != null)
+            {
+                visibleNpcs.Add(_decisionPointOccupant);
+            }
+
+            if (queueSlots == null)
+            {
+                return visibleNpcs.Count;
+            }
+
             foreach (QueueSlot slot in queueSlots)
             {
-                if (slot.IsOccupied)
+                if (slot != null && slot.Occupant != null)
                 {
-                    visibleCount++;
+                    visibleNpcs.Add(slot.Occupant);
                 }
             }
 
-            return visibleCount;
+            return visibleNpcs.Count;
         }
     }
 }

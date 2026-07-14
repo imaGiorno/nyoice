@@ -13,6 +13,10 @@ namespace Nyoice.Editor
     {
         private static readonly MethodInfo MovePointReachedMethod = GetNpcMethod("HandleMovePointReached");
         private static readonly MethodInfo UsePointReachedMethod = GetNpcMethod("HandleUsePointReached");
+        private static readonly FieldInfo DecisionPointOccupantField = GetQueueManagerField(
+            "_decisionPointOccupant");
+        private static readonly FieldInfo InternalWaitingListField = GetQueueManagerField(
+            "_internalWaitingList");
 
         [MenuItem("Nyoice/Validate Sprint4 Urinal Flow")]
         public static void ValidateSprint4UrinalFlow()
@@ -24,6 +28,7 @@ namespace Nyoice.Editor
                 ValidateTicketLimits(root.transform);
                 ValidateUrinalSelectionAndFlow(root.transform);
                 ValidateSelectionZoneSerialization(root.transform);
+                ValidateVisibleNpcLimit(root.transform);
                 Debug.Log("Sprint 4 urinal flow validation passed.");
             }
             finally
@@ -183,6 +188,93 @@ namespace Nyoice.Editor
             UnityEngine.Object.DestroyImmediate(queueManager.gameObject);
         }
 
+        private static void ValidateVisibleNpcLimit(Transform root)
+        {
+            Transform validationRoot = new GameObject("VisibleNpcLimitValidation").transform;
+            validationRoot.SetParent(root, false);
+
+            QueueSlot[] slots = new QueueSlot[8];
+            for (int index = 0; index < slots.Length; index++)
+            {
+                var slotObject = new GameObject($"VisibleQueue{index + 1:00}");
+                slotObject.transform.SetParent(validationRoot, false);
+                slots[index] = slotObject.AddComponent<QueueSlot>();
+                slots[index].Initialize(index + 1);
+            }
+
+            Transform decisionPoint = CreatePoint(validationRoot, "VisibleDecisionPoint", Vector3.zero);
+            Transform approachPoint = CreatePoint(validationRoot, "VisibleApproachPoint", Vector3.right);
+            Transform crossingTarget = CreatePoint(validationRoot, "VisibleCrossingTarget", Vector3.left);
+
+            UrinalController[] urinals = CreateUrinals(validationRoot);
+            UrinalManager urinalManager = new GameObject("VisibleUrinalManager")
+                .AddComponent<UrinalManager>();
+            urinalManager.transform.SetParent(validationRoot, false);
+            urinalManager.Configure(urinals, null, null);
+
+            UrinalTicketManager tickets = new GameObject("VisibleTicketManager")
+                .AddComponent<UrinalTicketManager>();
+            tickets.transform.SetParent(validationRoot, false);
+            tickets.Configure(8);
+
+            var queueManagerObject = new GameObject("VisibleQueueManager");
+            queueManagerObject.SetActive(false);
+            queueManagerObject.transform.SetParent(validationRoot, false);
+            QueueManager queueManager = queueManagerObject.AddComponent<QueueManager>();
+            queueManager.Configure(slots, decisionPoint);
+            queueManager.ConfigureUrinalFlow(
+                urinalManager,
+                tickets,
+                approachPoint,
+                crossingTarget);
+
+            var queuedNpcs = new List<NPCController>();
+            for (int index = 0; index < 6; index++)
+            {
+                NPCController npc = CreateNpc(validationRoot, $"VisibleQueueNPC_{index + 1:000}");
+                Require(slots[index].TryAssign(npc), "Visible queue setup failed.");
+                queuedNpcs.Add(npc);
+            }
+
+            NPCController frontNpc = CreateNpc(validationRoot, "VisibleFrontNPC");
+            frontNpc.Initialize(queueManager);
+            frontNpc.ConfigureUrinalFlow(urinalManager, tickets);
+            DecisionPointOccupantField.SetValue(queueManager, frontNpc);
+
+            NPCController eighthNpc = CreateNpc(validationRoot, "VisibleInternalNPC_008");
+            NPCController ninthNpc = CreateNpc(validationRoot, "VisibleInternalNPC_009");
+            AddInternalWaiter(queueManager, eighthNpc);
+            AddInternalWaiter(queueManager, ninthNpc);
+
+            frontNpc.HandleDecisionPointReached();
+
+            Require(queueManager.IsSelectionZoneOccupied, "SelectionZone was not occupied.");
+            Require(queueManager.VisibleNpcCount == 8, "Visible NPC count exceeded eight in SelectionZone flow.");
+            Require(eighthNpc.IsPresentationVisible, "The available visible slot was not filled.");
+            Require(!ninthNpc.IsPresentationVisible, "The ninth NPC became visible.");
+            Require(queueManager.InternalWaitingList.Count == 1, "More than one internal NPC was admitted.");
+
+            slots[0].Clear(queuedNpcs[0]);
+            DecisionPointOccupantField.SetValue(queueManager, queuedNpcs[0]);
+            Require(slots[6].TryAssign(frontNpc), "Duplicate-count validation setup failed.");
+            Require(
+                queueManager.VisibleNpcCount == 8,
+                "The same NPC was counted more than once across visible locations.");
+            slots[6].Clear(frontNpc);
+
+            Require(queueManager.NotifySelectionZoneCrossed(frontNpc), "SelectionZone release failed.");
+            Require(queueManager.VisibleNpcCount <= 8, "Visible NPC count exceeded eight after zone release.");
+            Require(!ninthNpc.IsPresentationVisible, "The ninth NPC became visible after zone release.");
+        }
+
+        private static void AddInternalWaiter(QueueManager queueManager, NPCController npc)
+        {
+            npc.Initialize(queueManager);
+            npc.WaitInternally();
+            var internalWaitingList = (List<NPCController>)InternalWaitingListField.GetValue(queueManager);
+            internalWaitingList.Add(npc);
+        }
+
         private static UrinalController[] CreateUrinals(Transform root)
         {
             var urinals = new UrinalController[8];
@@ -252,6 +344,19 @@ namespace Nyoice.Editor
             }
 
             return method;
+        }
+
+        private static FieldInfo GetQueueManagerField(string fieldName)
+        {
+            FieldInfo field = typeof(QueueManager).GetField(
+                fieldName,
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            if (field == null)
+            {
+                throw new MissingFieldException(typeof(QueueManager).FullName, fieldName);
+            }
+
+            return field;
         }
 
         private static void Require(bool condition, string message)
