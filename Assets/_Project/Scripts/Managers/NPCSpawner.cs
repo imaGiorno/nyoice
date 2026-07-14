@@ -22,6 +22,8 @@ namespace Nyoice.Managers
         [SerializeField, Min(0.1f)]
         private float spawnIntervalSeconds = 3f;
 
+        private int _spawnedNpcCount;
+
         public void Configure(
             NPCController prefab,
             Transform spawnPointTransform,
@@ -61,7 +63,8 @@ namespace Nyoice.Managers
             }
 
             NPCController npc = Instantiate(npcPrefab, spawnPoint.position, Quaternion.identity);
-            npc.name = $"NPC_{Time.frameCount}";
+            _spawnedNpcCount++;
+            npc.name = $"NPC_{_spawnedNpcCount:000}";
             queueManager.Enqueue(npc);
         }
 
@@ -80,3 +83,4 @@ namespace Nyoice.Managers
         }
     }
 }
+

@@ -18,6 +18,9 @@ namespace Nyoice.Managers
         [SerializeField]
         private Transform decisionPoint;
 
+        [SerializeField]
+        private bool enableQueueDebugLogs = true;
+
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
         private NPCController _decisionPointOccupant;
         private bool _hasLoggedInitializationError;
@@ -38,23 +41,13 @@ namespace Nyoice.Managers
         public void Enqueue(NPCController npc)
         {
             npc.Initialize(this);
+            npc.WaitInternally();
+            _internalWaitingList.Add(npc);
 
-            if (!EnsureRuntimeReferences())
+            if (EnsureRuntimeReferences())
             {
-                npc.WaitInternally();
-                _internalWaitingList.Add(npc);
-                return;
+                CompactQueue();
             }
-
-            QueueSlot entrySlot = FindLastAvailableSlot();
-            if (entrySlot == null || GetVisibleNpcCount() >= MaxVisibleNpcCount)
-            {
-                npc.WaitInternally();
-                _internalWaitingList.Add(npc);
-                return;
-            }
-
-            AssignToSlot(npc, entrySlot);
         }
 
         public bool EnsureRuntimeReferences()
@@ -114,88 +107,105 @@ namespace Nyoice.Managers
 
         public void NotifyQueueSlotReached(NPCController npc)
         {
-            AdvanceQueue();
+            QueueSlot reachedSlot = npc.CurrentSlot;
+            if (reachedSlot != null)
+            {
+                LogQueueEvent($"{npc.name} reached Queue{reachedSlot.QueueNumber:00}");
+            }
+
+            CompactQueue();
         }
 
         public void NotifyDecisionPointReached(NPCController npc)
         {
-            _decisionPointOccupant = npc;
-            AdvanceQueue();
+            LogQueueEvent($"{npc.name} reached DecisionPoint");
+            CompactQueue();
         }
 
-        private void AdvanceQueue()
+        private void CompactQueue()
         {
-            MoveFrontNpcToDecisionPoint();
-
-            for (int index = 1; index < queueSlots.Length; index++)
-            {
-                QueueSlot current = queueSlots[index];
-                QueueSlot next = queueSlots[index - 1];
-                NPCController npc = current.Occupant;
-
-                if (npc == null || !npc.IsWaitingAtSlot || next.IsOccupied)
-                {
-                    continue;
-                }
-
-                current.Clear(npc);
-                AssignToSlot(npc, next);
-            }
-
-            AdmitInternallyWaitingNpcs();
-        }
-
-        private void MoveFrontNpcToDecisionPoint()
-        {
-            if (_decisionPointOccupant != null || decisionPoint == null || queueSlots.Length == 0)
+            if (!HasValidQueueReferences())
             {
                 return;
             }
 
-            QueueSlot front = queueSlots[0];
-            NPCController npc = front.Occupant;
+            TryMoveToDecisionPoint();
+
+            for (int sourceIndex = 1; sourceIndex < queueSlots.Length; sourceIndex++)
+            {
+                TryAdvanceOneSlot(sourceIndex);
+            }
+
+            TryAdmitInternalWaiter();
+        }
+
+        private bool TryMoveToDecisionPoint()
+        {
+            if (_decisionPointOccupant != null || decisionPoint == null)
+            {
+                return false;
+            }
+
+            QueueSlot frontSlot = queueSlots[0];
+            NPCController npc = frontSlot.Occupant;
             if (npc == null || !npc.IsWaitingAtSlot)
             {
-                return;
+                return false;
             }
 
             _decisionPointOccupant = npc;
-            front.Clear(npc);
+            frontSlot.Clear(npc);
+            LogQueueEvent($"{npc.name} moved Queue01 -> DecisionPoint");
             npc.MoveToDecisionPoint(decisionPoint.position);
+            return true;
         }
 
-        private void AdmitInternallyWaitingNpcs()
+        private bool TryAdvanceOneSlot(int sourceIndex)
         {
-            while (_internalWaitingList.Count > 0)
+            QueueSlot sourceSlot = queueSlots[sourceIndex];
+            QueueSlot destinationSlot = queueSlots[sourceIndex - 1];
+            NPCController npc = sourceSlot.Occupant;
+
+            if (npc == null || !npc.IsWaitingAtSlot || destinationSlot.IsOccupied)
             {
-                if (GetVisibleNpcCount() >= MaxVisibleNpcCount)
-                {
-                    return;
-                }
-
-                QueueSlot entrySlot = FindLastAvailableSlot();
-                if (entrySlot == null)
-                {
-                    return;
-                }
-
-                NPCController npc = _internalWaitingList[0];
-                _internalWaitingList.RemoveAt(0);
-                AssignToSlot(npc, entrySlot);
+                return false;
             }
+
+            if (!destinationSlot.TryAssign(npc))
+            {
+                return false;
+            }
+
+            sourceSlot.Clear(npc);
+            LogQueueEvent(
+                $"{npc.name} moved Queue{sourceSlot.QueueNumber:00} -> Queue{destinationSlot.QueueNumber:00}");
+            npc.EnterVisibleQueue(destinationSlot);
+            return true;
         }
 
-        private QueueSlot FindLastAvailableSlot()
+        private bool TryAdmitInternalWaiter()
         {
-            for (int index = queueSlots.Length - 1; index >= 0; index--)
+            if (_internalWaitingList.Count == 0 || GetVisibleNpcCount() >= MaxVisibleNpcCount)
             {
-                if (!queueSlots[index].IsOccupied)
-                {
-                    return queueSlots[index];
-                }
+                return false;
             }
 
-            return null;
+            QueueSlot entrySlot = queueSlots[queueSlots.Length - 1];
+            if (entrySlot.IsOccupied)
+            {
+                return false;
+            }
+
+            NPCController npc = _internalWaitingList[0];
+            if (!entrySlot.TryAssign(npc))
+            {
+                return false;
+            }
+
+            _internalWaitingList.RemoveAt(0);
+            LogQueueEvent($"{npc.name} assigned to Queue08");
+            npc.EnterVisibleQueue(entrySlot);
+            return true;
         }
 
         private bool HasValidQueueReferences()
@@ -228,6 +238,14 @@ namespace Nyoice.Managers
             Debug.LogError(message, this);
         }
 
+        private void LogQueueEvent(string message)
+        {
+            if (enableQueueDebugLogs)
+            {
+                Debug.Log(message, this);
+            }
+        }
+
         private int GetVisibleNpcCount()
         {
             int visibleCount = _decisionPointOccupant != null ? 1 : 0;
@@ -242,13 +260,6 @@ namespace Nyoice.Managers
 
             return visibleCount;
         }
-
-        private static void AssignToSlot(NPCController npc, QueueSlot slot)
-        {
-            if (slot.TryAssign(npc))
-            {
-                npc.EnterVisibleQueue(slot);
-            }
-        }
     }
 }
+

@@ -25,12 +25,12 @@ namespace Nyoice.Editor
         private const float UrinalY = 3.25f;
         private const float StageBottomY = -4.75f;
         private const float NyoiceLineX = 6f;
-        private const float DecisionPointX = 6.35f;
+        private const float DecisionPointX = 6.5f;
         private const float NyoiceApproachX = 6.2f;
-        private const float QueueStartX = 6.5f;
-        private const float QueueSpacing = 0.45f;
-        private const float QueueY = -3.75f;
-        private const float SpawnPointX = 10.1f;
+        private const float QueueLaneX = 7f;
+        private const float QueueStartY = -3.75f;
+        private const float QueueSpacingY = 1f;
+        private const float SpawnPointY = 4.5f;
 
         private static readonly Vector3 NpcVisualScale = new Vector3(0.12f, 0.45f, 0.3f);
         private static readonly Vector3 NpcVisualPosition = new Vector3(0f, 0.45f, 0f);
@@ -40,7 +40,7 @@ namespace Nyoice.Editor
         {
             if (!File.Exists(GameScenePath))
             {
-                Warn("GameSceneが見つかりません。先に Nyoice > Setup Sprint 1 を実行してください。");
+                Warn("GameScene縺瑚ｦ九▽縺九ｊ縺ｾ縺帙ｓ縲ょ・縺ｫ Nyoice > Setup Sprint 1 繧貞ｮ溯｡後＠縺ｦ縺上□縺輔＞縲・);
                 return;
             }
 
@@ -51,10 +51,14 @@ namespace Nyoice.Editor
 
             Scene gameScene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
             NPCController npcPrefab = CreateNpcPrefab();
-            if (GameObject.Find(GameStageName) != null)
+            GameObject existingGameStage = GameObject.Find(GameStageName);
+            if (existingGameStage != null)
             {
+                UpdateExistingQueueLayout(existingGameStage.transform);
                 AssetDatabase.SaveAssets();
-                Warn("NPC.prefabを最新化しました。GameStageは既に存在するため、ステージ生成を中止しました。");
+                EditorSceneManager.MarkSceneDirty(gameScene);
+                EditorSceneManager.SaveScene(gameScene);
+                Warn("NPC.prefab縺ｨQueue驟咲ｽｮ繧呈怙譁ｰ蛹悶＠縺ｾ縺励◆縲・ameStage縺ｮ驥崎､・函謌舌・陦後▲縺ｦ縺・∪縺帙ｓ縲・);
                 return;
             }
 
@@ -83,7 +87,7 @@ namespace Nyoice.Editor
             EditorSceneManager.SaveScene(gameScene);
             Selection.activeGameObject = gameStage;
 
-            Info("GameStageをGameSceneへ生成しました。");
+            Info("GameStage繧竪ameScene縺ｸ逕滓・縺励∪縺励◆縲・);
         }
 
         private static void CreateUrinals(Transform parent)
@@ -144,14 +148,14 @@ namespace Nyoice.Editor
             CreateCube(
                 "EntranceMarker",
                 parent,
-                new Vector3(10.4f, QueueY, 0f),
+                new Vector3(QueueLaneX, 5f, 0f),
                 new Vector3(0.25f, 2f, 0.25f),
                 new Color(0.25f, 0.65f, 0.35f));
 
             GameObject spawnPoint = CreatePoint(
                 "SpawnPoint",
                 parent,
-                new Vector3(SpawnPointX, QueueY, 0f),
+                new Vector3(QueueLaneX, SpawnPointY, 0f),
                 Color.green);
             return spawnPoint.transform;
         }
@@ -161,24 +165,23 @@ namespace Nyoice.Editor
             GameObject decision = CreatePoint(
                 "DecisionPoint",
                 parent,
-                new Vector3(DecisionPointX, QueueY, 0f),
+                new Vector3(DecisionPointX, QueueStartY, 0f),
                 new Color(0.75f, 0.25f, 1f));
             decisionPoint = decision.transform;
 
             CreatePoint(
                 "NyoiceApproachPoint",
                 parent,
-                new Vector3(NyoiceApproachX, QueueY, 0f),
+                new Vector3(NyoiceApproachX, QueueStartY, 0f),
                 new Color(1f, 0.35f, 0.15f));
 
             var slots = new QueueSlot[UrinalCount];
             for (int index = 0; index < UrinalCount; index++)
             {
-                float x = QueueStartX + (index * QueueSpacing);
                 GameObject slotObject = CreatePoint(
                     $"Queue{index + 1:00}",
                     parent,
-                    new Vector3(x, QueueY, 0f),
+                    GetQueuePosition(index),
                     new Color(1f, 0.75f, 0.15f));
                 QueueSlot slot = slotObject.AddComponent<QueueSlot>();
                 slot.Initialize(index + 1);
@@ -187,6 +190,46 @@ namespace Nyoice.Editor
             }
 
             return slots;
+        }
+
+        private static void UpdateExistingQueueLayout(Transform gameStage)
+        {
+            Transform queue = gameStage.Find("Queue");
+            Transform entrance = gameStage.Find("Entrance");
+            if (queue == null || entrance == null)
+            {
+                Debug.LogError("Existing GameStage is missing Queue or Entrance.");
+                return;
+            }
+
+            SetExistingPointPosition(queue, "DecisionPoint", new Vector3(DecisionPointX, QueueStartY, 0f));
+            SetExistingPointPosition(queue, "NyoiceApproachPoint", new Vector3(NyoiceApproachX, QueueStartY, 0f));
+
+            for (int index = 0; index < UrinalCount; index++)
+            {
+                SetExistingPointPosition(queue, $"Queue{index + 1:00}", GetQueuePosition(index));
+            }
+
+            SetExistingPointPosition(entrance, "SpawnPoint", new Vector3(QueueLaneX, SpawnPointY, 0f));
+            SetExistingPointPosition(entrance, "EntranceMarker", new Vector3(QueueLaneX, 5f, 0f));
+        }
+
+        private static void SetExistingPointPosition(Transform parent, string childName, Vector3 position)
+        {
+            Transform point = parent.Find(childName);
+            if (point == null)
+            {
+                Debug.LogError($"Existing GameStage is missing {parent.name}/{childName}.");
+                return;
+            }
+
+            point.position = position;
+            EditorUtility.SetDirty(point);
+        }
+
+        private static Vector3 GetQueuePosition(int index)
+        {
+            return new Vector3(QueueLaneX, QueueStartY + (index * QueueSpacingY), 0f);
         }
 
         private static void CreateNyoiceLine(Transform parent)
@@ -395,3 +438,4 @@ namespace Nyoice.Editor
         }
     }
 }
+
