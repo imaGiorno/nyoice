@@ -30,6 +30,7 @@ namespace Nyoice.Editor
         private const float CrossingTargetX = 5.8f;
         private const float SpawnPointY = 4.5f;
 
+        private static readonly Vector3 UrinalBodyScale = new Vector3(1f, 1.2f, 0.5f);
         private static readonly Vector3 NpcVisualScale = new Vector3(0.12f, 0.45f, 0.3f);
         private static readonly Vector3 NpcVisualPosition = new Vector3(0f, 0.45f, 0f);
 
@@ -117,14 +118,17 @@ namespace Nyoice.Editor
             {
                 var urinal = new GameObject($"Urinal{index + 1:00}");
                 urinal.transform.SetParent(parent, false);
-                urinal.transform.position = new Vector3(GetUrinalX(index), UrinalY, 0f);
+                urinal.transform.localPosition = new Vector3(GetUrinalX(index), UrinalY, 0f);
 
                 GameObject body = CreateCube(
                     "Body",
                     urinal.transform,
                     Vector3.zero,
-                    new Vector3(1f, 1.2f, 0.5f),
+                    UrinalBodyScale,
                     new Color(0.82f, 0.88f, 0.92f));
+                body.transform.localPosition = Vector3.zero;
+                body.transform.localRotation = Quaternion.identity;
+                body.transform.localScale = UrinalBodyScale;
                 body.GetComponent<BoxCollider>().isTrigger = false;
                 CreateNumberLabel(urinal.transform, index + 1);
             }
@@ -340,12 +344,12 @@ namespace Nyoice.Editor
                 {
                     urinal = new GameObject(urinalName).transform;
                     urinal.SetParent(urinalRoot, false);
-                    urinal.position = new Vector3(GetUrinalX(index), UrinalY, 0f);
+                    urinal.localPosition = new Vector3(GetUrinalX(index), UrinalY, 0f);
                     CreateCube(
                         "Body",
                         urinal,
                         Vector3.zero,
-                        new Vector3(1f, 1.2f, 0.5f),
+                        UrinalBodyScale,
                         new Color(0.82f, 0.88f, 0.92f));
                     CreateNumberLabel(urinal, index + 1);
                 }
@@ -357,9 +361,19 @@ namespace Nyoice.Editor
                         "Body",
                         urinal,
                         Vector3.zero,
-                        new Vector3(1f, 1.2f, 0.5f),
+                        UrinalBodyScale,
                         new Color(0.82f, 0.88f, 0.92f)).transform;
                 }
+
+                urinal.SetParent(urinalRoot, false);
+                urinal.localPosition = new Vector3(GetUrinalX(index), UrinalY, 0f);
+                urinal.localRotation = Quaternion.identity;
+                urinal.localScale = Vector3.one;
+
+                body.SetParent(urinal, false);
+                body.localPosition = Vector3.zero;
+                body.localRotation = Quaternion.identity;
+                body.localScale = UrinalBodyScale;
 
                 BoxCollider bodyCollider = body.GetComponent<BoxCollider>();
                 if (bodyCollider == null)
@@ -413,14 +427,14 @@ namespace Nyoice.Editor
 
         private static GameObject EnsureHighlight(Transform urinal, Transform body)
         {
-            Transform highlight = urinal.Find("Highlight");
-            if (highlight == null)
+            Transform existingHighlight = urinal.Find("Highlight");
+            if (existingHighlight != null)
             {
-                highlight = new GameObject("Highlight").transform;
-                highlight.SetParent(urinal, false);
+                Object.DestroyImmediate(existingHighlight.gameObject);
             }
 
-            RemovePrimitiveComponents(highlight.gameObject);
+            Transform highlight = new GameObject("Highlight").transform;
+            highlight.SetParent(urinal, false);
             float frontZ = body.localPosition.z - ((body.localScale.z * 0.5f) + 0.08f);
             highlight.localPosition = new Vector3(body.localPosition.x, body.localPosition.y, frontZ);
             highlight.localRotation = body.localRotation;
@@ -491,27 +505,6 @@ namespace Nyoice.Editor
             if (collider != null)
             {
                 Object.DestroyImmediate(collider);
-            }
-        }
-
-        private static void RemovePrimitiveComponents(GameObject target)
-        {
-            Collider collider = target.GetComponent<Collider>();
-            if (collider != null)
-            {
-                Object.DestroyImmediate(collider);
-            }
-
-            Renderer renderer = target.GetComponent<Renderer>();
-            if (renderer != null)
-            {
-                Object.DestroyImmediate(renderer);
-            }
-
-            MeshFilter meshFilter = target.GetComponent<MeshFilter>();
-            if (meshFilter != null)
-            {
-                Object.DestroyImmediate(meshFilter);
             }
         }
 

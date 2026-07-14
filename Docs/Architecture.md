@@ -89,4 +89,6 @@ The visible waiting limit counts unique NPC references across SelectionZone, Dec
 
 At NyoiceApproachPoint, the SelectionZone occupant enters `SelectingUrinal` and remains stationary for a configurable two-second default window. Pointer, touch, and arrow input remain active throughout this wait. The yellow four-sided highlight frame is placed toward the camera in front of the urinal Body.
 
+Each urinal Body is fixed at local `(0, 0, 0)` beneath its `UrinalXX` root. Setup deletes and rebuilds that urinal's Highlight as a direct child using Body-local coordinates, preventing all frames from collapsing to the world origin.
+
 Tickets are released through `NPCController.ReleaseUrinalTicket()`. Sprint 4 exposes this entry point but does not start the exit flow.

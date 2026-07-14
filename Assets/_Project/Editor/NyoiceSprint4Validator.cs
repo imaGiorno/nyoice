@@ -85,6 +85,7 @@ namespace Nyoice.Editor
             UrinalManager manager = new GameObject("UrinalManagerValidation").AddComponent<UrinalManager>();
             manager.transform.SetParent(root, false);
             manager.Configure(urinals, null, null);
+            ValidateHighlightPlacement(urinals);
 
             NPCController selectionNpc = CreateNpc(root, "SelectionNPC");
             Require(manager.BeginSelection(selectionNpc), "Selection session did not start.");
@@ -100,6 +101,11 @@ namespace Nyoice.Editor
 
             Require(manager.SelectUrinal(urinals[2]), "Urinal03 selection failed.");
             Require(CountActiveHighlights(urinals) == 1, "More than one highlight is active.");
+            Require(urinals[2].Highlight.activeSelf, "Urinal03 Highlight is not active.");
+            Require(manager.SelectUrinal(urinals[4]), "Selection change to Urinal05 failed.");
+            Require(!urinals[2].Highlight.activeSelf, "Old Urinal03 Highlight remained active.");
+            Require(urinals[4].Highlight.activeSelf, "New Urinal05 Highlight is not active.");
+            Require(CountActiveHighlights(urinals) == 1, "Selection change activated multiple Highlights.");
 
             NPCController reservationNpc = CreateNpc(root, "ReservationNPC");
             Require(manager.EndSelection(selectionNpc), "Initial selection session did not end.");
@@ -332,14 +338,22 @@ namespace Nyoice.Editor
             {
                 var urinal = new GameObject($"Urinal{index + 1:00}");
                 urinal.transform.SetParent(root, false);
+                urinal.transform.localPosition = new Vector3(index * 1.5f, 3.25f, 0f);
+                urinal.transform.localRotation = Quaternion.identity;
+                urinal.transform.localScale = Vector3.one;
 
                 GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 body.name = "Body";
                 body.transform.SetParent(urinal.transform, false);
+                body.transform.localPosition = Vector3.zero;
+                body.transform.localRotation = Quaternion.identity;
+                body.transform.localScale = new Vector3(1f, 1.2f, 0.5f);
 
                 var highlight = new GameObject("Highlight");
                 highlight.transform.SetParent(urinal.transform, false);
-                highlight.transform.localPosition = new Vector3(0f, 0f, -0.4f);
+                highlight.transform.localPosition = new Vector3(0f, 0f, -0.33f);
+                highlight.transform.localRotation = Quaternion.identity;
+                highlight.transform.localScale = Vector3.one;
                 highlight.SetActive(false);
 
                 Transform movePoint = CreatePoint(urinal.transform, "MovePoint", new Vector3(index, 1f, 0f));
@@ -350,6 +364,41 @@ namespace Nyoice.Editor
             }
 
             return urinals;
+        }
+
+        private static void ValidateHighlightPlacement(IReadOnlyList<UrinalController> urinals)
+        {
+            const float centerTolerance = 0.001f;
+            const float distinctPositionTolerance = 0.01f;
+
+            for (int index = 0; index < urinals.Count; index++)
+            {
+                UrinalController urinal = urinals[index];
+                Transform highlight = urinal.Highlight.transform;
+                Transform body = urinal.BodyRenderer.transform;
+
+                Require(
+                    highlight.parent == urinal.transform,
+                    $"Urinal{urinal.UrinalNumber:00} Highlight has the wrong parent.");
+                Require(
+                    Mathf.Abs(highlight.localPosition.x - body.localPosition.x) <= centerTolerance &&
+                    Mathf.Abs(highlight.localPosition.y - body.localPosition.y) <= centerTolerance,
+                    $"Urinal{urinal.UrinalNumber:00} Highlight is not centered on its Body.");
+                Require(
+                    highlight.position.z < urinal.BodyRenderer.bounds.center.z,
+                    $"Urinal{urinal.UrinalNumber:00} Highlight is not toward the camera.");
+                Require(
+                    highlight.position.sqrMagnitude > distinctPositionTolerance * distinctPositionTolerance,
+                    $"Urinal{urinal.UrinalNumber:00} Highlight was placed near the world origin.");
+
+                for (int otherIndex = index + 1; otherIndex < urinals.Count; otherIndex++)
+                {
+                    Vector3 otherPosition = urinals[otherIndex].Highlight.transform.position;
+                    Require(
+                        Vector3.Distance(highlight.position, otherPosition) > distinctPositionTolerance,
+                        "Multiple urinal Highlights share the same world position.");
+                }
+            }
         }
 
         private static NPCController CreateNpc(Transform root, string name)

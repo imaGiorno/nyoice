@@ -76,6 +76,7 @@
 - The eight-NPC display cap uses a unique set across SelectionZone, DecisionPoint, and QueueSlots so transition overlap cannot double-count an NPC.
 - Selection input receives a two-second default pause at NyoiceApproachPoint so pointer and keyboard choices are observable before line crossing.
 - The selected urinal uses an unlit yellow four-sided frame in front of the Body instead of relying on subtle emission.
+- Urinal Body and Highlight placement uses local transforms only. Existing Highlights are deleted and rebuilt on every setup run so malformed scene children are repaired without replacing GameStage.
 - Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
 - The destination is immutable after `UrinalController.Reserve()` succeeds.
 - A kinematic Rigidbody is added to the NPC prefab so the NyoiceLine trigger receives collision events reliably.
