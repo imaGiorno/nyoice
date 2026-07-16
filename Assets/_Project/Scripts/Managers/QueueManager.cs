@@ -31,6 +31,9 @@ namespace Nyoice.Managers
         private Transform exitPoint;
 
         [SerializeField]
+        private GameStateManager gameStateManager;
+
+        [SerializeField]
         private bool enableQueueDebugLogs = true;
 
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
@@ -38,11 +41,13 @@ namespace Nyoice.Managers
         private NPCController _selectionZoneOccupant;
         private bool _hasLoggedInitializationError;
         private bool _ticketEventSubscribed;
+        private bool _gameOverLogged;
 
         public IReadOnlyList<NPCController> InternalWaitingList => _internalWaitingList;
         public NPCController SelectionZoneOccupant => _selectionZoneOccupant;
         public bool IsSelectionZoneOccupied => _selectionZoneOccupant != null;
         public int VisibleNpcCount => GetVisibleNpcCount();
+        public bool IsProgressionBlocked => gameStateManager != null && gameStateManager.IsGameOver;
 
         private void Awake()
         {
@@ -53,6 +58,7 @@ namespace Nyoice.Managers
         private void OnDestroy()
         {
             UnsubscribeFromTicketManager();
+            UnsubscribeFromGameState();
         }
 
         public void Configure(QueueSlot[] slots, Transform decisionPointTransform)
@@ -80,8 +86,22 @@ namespace Nyoice.Managers
             exitPoint = configuredExitPoint;
         }
 
+        public void ConfigureGameState(GameStateManager configuredGameStateManager)
+        {
+            UnsubscribeFromGameState();
+            gameStateManager = configuredGameStateManager;
+            SubscribeToGameState();
+        }
+
         public void Enqueue(NPCController npc)
         {
+            if (npc == null || IsProgressionBlocked)
+            {
+                LogGameOverBlock();
+                return;
+            }
+
+            npc.ConfigureGameState(gameStateManager);
             npc.Initialize(this);
             npc.ConfigureUrinalFlow(urinalManager, ticketManager);
             npc.ConfigureExitFlow(exitPoint);
@@ -145,6 +165,12 @@ namespace Nyoice.Managers
 
         public void NotifyQueueSlotReached(NPCController npc)
         {
+            if (IsProgressionBlocked)
+            {
+                LogGameOverBlock();
+                return;
+            }
+
             QueueSlot reachedSlot = npc.CurrentSlot;
             if (reachedSlot != null)
             {
@@ -156,6 +182,12 @@ namespace Nyoice.Managers
 
         public void NotifyDecisionPointReached(NPCController npc)
         {
+            if (IsProgressionBlocked)
+            {
+                LogGameOverBlock();
+                return;
+            }
+
             LogQueueEvent($"{npc.name} reached DecisionPoint");
             TryStartFrontWaitingNpc();
             CompactQueue();
@@ -163,7 +195,7 @@ namespace Nyoice.Managers
 
         public bool NotifySelectionZoneCrossed(NPCController npc)
         {
-            if (npc == null || _selectionZoneOccupant != npc)
+            if (IsProgressionBlocked || npc == null || _selectionZoneOccupant != npc)
             {
                 return false;
             }
@@ -177,7 +209,7 @@ namespace Nyoice.Managers
 
         public bool TryEnterSelectionZone(NPCController npc)
         {
-            if (npc == null || _selectionZoneOccupant != null ||
+            if (IsProgressionBlocked || npc == null || _selectionZoneOccupant != null ||
                 ticketManager == null || !ticketManager.HasTicket(npc) ||
                 urinalManager == null || !urinalManager.BeginSelection(npc))
             {
@@ -191,8 +223,9 @@ namespace Nyoice.Managers
 
         private void CompactQueue()
         {
-            if (!HasValidQueueReferences())
+            if (IsProgressionBlocked || !HasValidQueueReferences())
             {
+                LogGameOverBlock();
                 return;
             }
 
@@ -343,7 +376,13 @@ namespace Nyoice.Managers
                 exitPoint = point != null ? point.transform : null;
             }
 
+            if (gameStateManager == null)
+            {
+                gameStateManager = FindAnyObjectByType<GameStateManager>();
+            }
+
             SubscribeToTicketManager();
+            SubscribeToGameState();
         }
 
         private void SubscribeToTicketManager()
@@ -369,8 +408,47 @@ namespace Nyoice.Managers
 
         private void HandleTicketReleased()
         {
+            if (IsProgressionBlocked)
+            {
+                LogGameOverBlock();
+                return;
+            }
+
             TryStartFrontWaitingNpc();
             CompactQueue();
+        }
+
+        private void SubscribeToGameState()
+        {
+            if (gameStateManager != null)
+            {
+                gameStateManager.GameOver -= HandleGameOver;
+                gameStateManager.GameOver += HandleGameOver;
+            }
+        }
+
+        private void UnsubscribeFromGameState()
+        {
+            if (gameStateManager != null)
+            {
+                gameStateManager.GameOver -= HandleGameOver;
+            }
+        }
+
+        private void HandleGameOver()
+        {
+            LogGameOverBlock();
+        }
+
+        private void LogGameOverBlock()
+        {
+            if (!IsProgressionBlocked || _gameOverLogged)
+            {
+                return;
+            }
+
+            _gameOverLogged = true;
+            LogQueueEvent("Queue progression blocked because game is over");
         }
 
         private bool HasValidQueueReferences()

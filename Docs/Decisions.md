@@ -77,7 +77,7 @@
 - Selection input receives a two-second default pause at NyoiceApproachPoint so pointer and keyboard choices are observable before line crossing.
 - The selected urinal uses an unlit yellow four-sided frame in front of the Body instead of relying on subtle emission.
 - Urinal Body and Highlight placement uses local transforms only. Existing Highlights are deleted and rebuilt on every setup run so malformed scene children are repaired without replacing GameStage.
-- Urination duration belongs to each NPC and defaults to three seconds. `ReadyToLeave` represents completed use without implying urinal release, Ticket return, or exit movement.
+- Urination duration belongs to each NPC and defaults to six seconds after Sprint 5-3A timing validation. `ReadyToLeave` represents completed use without implying urinal release, Ticket return, or exit movement.
 - Urinal release and Ticket return are deferred until movement from UsePoint to ExitStartPoint begins in Sprint 5-2.
 - Automatic selection scans Urinal08 through Urinal01 and ignores Reserved or Occupied urinals.
 - The destination is immutable after `UrinalController.Reserve()` succeeds.
@@ -93,3 +93,13 @@
 - `TicketReleased` remains the single signal that retries a FrontWaiting DecisionPoint NPC. No second queue progression path is introduced for exits.
 - NPC destruction is scheduled only after the guarded `Leaving -> Finished` transition at ExitPoint. An Editor-only validation flag makes this observable without immediate Play Mode destruction.
 - Object pooling remains deferred. Completed NPC GameObjects are destroyed after reaching ExitPoint.
+
+## Sprint 5-3A decisions
+
+- GameOver is an explicit shared state rather than `Time.timeScale = 0`. Each gameplay owner blocks new work, while every configured `NPCMovement` stops its active callback immediately through the GameOver event.
+- Discomfort counts adjacent urinal pairs, not distinct NPCs. Three consecutive Occupied urinals therefore produce exactly two pairs.
+- Occupied is the authoritative adjacency condition. This includes `UsingUrinal` and `ReadyToLeave`, while Reserved is excluded. Existing Sprint5-2 release timing removes a urinal from adjacency as soon as leaving begins.
+- Discomfort is frame-rate independent: pair count is multiplied by the serialized per-pair rate and `Time.deltaTime`.
+- GameOver is one-shot and clamps discomfort to 100 before notifying listeners. The UI receives both value and state events so `100 / 100` and `GAME OVER` remain synchronized.
+- The status HUD uses standard uGUI and the built-in legacy runtime font. No external font, asset, package, IMGUI, or restart control is introduced.
+- NPC movement defaults to 4.0 units per second and urination to six seconds. This creates a visible Occupied overlap without changing queue, line, urinal, MovePoint, or UsePoint coordinates.

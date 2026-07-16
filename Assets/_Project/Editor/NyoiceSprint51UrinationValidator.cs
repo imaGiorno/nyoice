@@ -70,8 +70,8 @@ namespace Nyoice.Editor
             npc.ConfigureUrinalFlow(urinalManager, ticketManager);
 
             Require(
-                Mathf.Approximately(npc.UrinationDurationSeconds, 3f),
-                "Default urination duration is not three seconds.");
+                Mathf.Approximately(npc.UrinationDurationSeconds, 6f),
+                "Default urination duration is not six seconds.");
             npc.ConfigureUrinationDuration(0.1f);
 
             Require(ticketManager.TryAcquireTicket(npc), "NPC could not acquire its ticket.");

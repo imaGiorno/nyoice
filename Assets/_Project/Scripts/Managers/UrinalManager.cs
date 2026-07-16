@@ -23,10 +23,14 @@ namespace Nyoice.Managers
         private AudioClip selectionClip;
 
         [SerializeField]
+        private GameStateManager gameStateManager;
+
+        [SerializeField]
         private bool enableDebugLogs = true;
 
         public UrinalController CurrentSelection { get; private set; }
         public NPCController ActiveSelectionNpc { get; private set; }
+        public bool IsInputEnabled => gameStateManager == null || !gameStateManager.IsGameOver;
 
         private void Awake()
         {
@@ -48,6 +52,11 @@ namespace Nyoice.Managers
 
         private void Update()
         {
+            if (!IsInputEnabled)
+            {
+                return;
+            }
+
             bool leftPressed = Input.GetKeyDown(KeyCode.LeftArrow);
             bool rightPressed = Input.GetKeyDown(KeyCode.RightArrow);
             bool mousePressed = Input.GetMouseButtonDown(0);
@@ -101,6 +110,32 @@ namespace Nyoice.Managers
             }
         }
 
+        public void ConfigureGameState(GameStateManager configuredGameStateManager)
+        {
+            if (gameStateManager != null)
+            {
+                gameStateManager.GameOver -= HandleGameOver;
+            }
+
+            gameStateManager = configuredGameStateManager;
+            if (gameStateManager != null)
+            {
+                gameStateManager.GameOver += HandleGameOver;
+                if (gameStateManager.IsGameOver)
+                {
+                    HandleGameOver();
+                }
+            }
+        }
+
+        private void OnDestroy()
+        {
+            if (gameStateManager != null)
+            {
+                gameStateManager.GameOver -= HandleGameOver;
+            }
+        }
+
         public IReadOnlyList<UrinalController> GetAvailableByPriority()
         {
             var available = new List<UrinalController>(UrinalCount);
@@ -124,7 +159,7 @@ namespace Nyoice.Managers
 
         public bool SelectUrinal(UrinalController urinal)
         {
-            if (ActiveSelectionNpc == null || urinal == null || !urinal.IsAvailable)
+            if (!IsInputEnabled || ActiveSelectionNpc == null || urinal == null || !urinal.IsAvailable)
             {
                 return false;
             }
@@ -144,7 +179,8 @@ namespace Nyoice.Managers
 
         public bool BeginSelection(NPCController npc)
         {
-            if (npc == null || (ActiveSelectionNpc != null && ActiveSelectionNpc != npc))
+            if (!IsInputEnabled || npc == null ||
+                (ActiveSelectionNpc != null && ActiveSelectionNpc != npc))
             {
                 return false;
             }
@@ -170,7 +206,7 @@ namespace Nyoice.Managers
 
         public UrinalController ConfirmSelection(NPCController npc)
         {
-            if (npc == null || ActiveSelectionNpc != npc)
+            if (!IsInputEnabled || npc == null || ActiveSelectionNpc != npc)
             {
                 return null;
             }
@@ -195,7 +231,7 @@ namespace Nyoice.Managers
 
         public void MoveSelection(int direction)
         {
-            if (direction == 0)
+            if (!IsInputEnabled || direction == 0)
             {
                 return;
             }
@@ -303,6 +339,13 @@ namespace Nyoice.Managers
                 CurrentSelection.SetSelected(false);
                 CurrentSelection = null;
             }
+        }
+
+        private void HandleGameOver()
+        {
+            ClearSelection();
+            ActiveSelectionNpc = null;
+            Log("Urinal selection input disabled because game is over");
         }
 
         private void PlaySelectionSound()

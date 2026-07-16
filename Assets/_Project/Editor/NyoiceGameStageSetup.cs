@@ -3,10 +3,12 @@ using Nyoice.Core;
 using Nyoice.Managers;
 using Nyoice.NPC;
 using Nyoice.Toilet;
+using Nyoice.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 namespace Nyoice.Editor
 {
@@ -29,6 +31,8 @@ namespace Nyoice.Editor
         private const float NyoiceLineX = 6f;
         private const float CrossingTargetX = 5.8f;
         private const float SpawnPointY = 4.5f;
+        private const float NpcMovementSpeed = 4f;
+        private const float NpcUrinationDurationSeconds = 6f;
 
         private static readonly Vector3 UrinalBodyScale = new Vector3(1f, 1.2f, 0.5f);
         private static readonly Vector3 NpcVisualScale = new Vector3(0.12f, 0.45f, 0.3f);
@@ -62,7 +66,7 @@ namespace Nyoice.Editor
             ConfigureStageAndSystems(gameStage.transform, npcPrefab);
             SaveSceneAndAssets(gameScene);
             Selection.activeGameObject = gameStage;
-            ShowInfo("GameStage and Sprint 5-2 systems are ready.");
+            ShowInfo("GameStage and Sprint 5-3A systems are ready.");
         }
 
         private static GameObject CreateGameStage()
@@ -555,6 +559,12 @@ namespace Nyoice.Editor
             UrinalTicketManager ticketManager = GetOrCreateChildComponent<UrinalTicketManager>(
                 gameSystems.transform,
                 "UrinalTicketManager");
+            GameStateManager gameStateManager = GetOrCreateChildComponent<GameStateManager>(
+                gameSystems.transform,
+                "GameStateManager");
+            DiscomfortManager discomfortManager = GetOrCreateChildComponent<DiscomfortManager>(
+                gameSystems.transform,
+                "DiscomfortManager");
 
             AudioSource audioSource = urinalManager.GetComponent<AudioSource>();
             if (audioSource == null)
@@ -564,17 +574,193 @@ namespace Nyoice.Editor
 
             audioSource.playOnAwake = false;
             ticketManager.Configure(UrinalCount);
+            ticketManager.ConfigureGameState(gameStateManager);
             urinalManager.Configure(urinals, Camera.main, audioSource);
+            urinalManager.ConfigureGameState(gameStateManager);
             queueManager.Configure(queueSlots, decisionPoint);
             queueManager.ConfigureUrinalFlow(urinalManager, ticketManager, approachPoint, crossingTarget);
             queueManager.ConfigureExitFlow(exitPoint);
+            queueManager.ConfigureGameState(gameStateManager);
             spawner.Configure(npcPrefab, spawnPoint, queueManager);
+            spawner.ConfigureGameState(gameStateManager);
+            discomfortManager.Configure(urinals, gameStateManager);
+            EnsureDiscomfortUI(discomfortManager, gameStateManager);
 
             EditorUtility.SetDirty(queueManager);
             EditorUtility.SetDirty(spawner);
             EditorUtility.SetDirty(urinalManager);
             EditorUtility.SetDirty(ticketManager);
+            EditorUtility.SetDirty(gameStateManager);
+            EditorUtility.SetDirty(discomfortManager);
             EditorUtility.SetDirty(audioSource);
+        }
+
+        private static void EnsureDiscomfortUI(
+            DiscomfortManager discomfortManager,
+            GameStateManager gameStateManager)
+        {
+            GameObject uiRoot = GameObject.Find("UI");
+            if (uiRoot == null)
+            {
+                uiRoot = new GameObject("UI");
+            }
+
+            Transform existingCanvas = uiRoot.transform.Find("DiscomfortCanvas");
+            GameObject canvasObject;
+            if (existingCanvas == null)
+            {
+                canvasObject = new GameObject(
+                    "DiscomfortCanvas",
+                    typeof(RectTransform),
+                    typeof(Canvas),
+                    typeof(CanvasScaler),
+                    typeof(GraphicRaycaster));
+                canvasObject.transform.SetParent(uiRoot.transform, false);
+            }
+            else
+            {
+                canvasObject = existingCanvas.gameObject;
+            }
+
+            Canvas canvas = GetOrAddComponent<Canvas>(canvasObject);
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = 100;
+
+            CanvasScaler scaler = GetOrAddComponent<CanvasScaler>(canvasObject);
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.matchWidthOrHeight = 0.5f;
+            GetOrAddComponent<GraphicRaycaster>(canvasObject);
+
+            Text discomfortText = EnsureUiText(
+                canvasObject.transform,
+                "DiscomfortText",
+                new Vector2(0.2f, 0.90f),
+                new Vector2(0.8f, 0.99f),
+                40,
+                TextAnchor.MiddleCenter);
+            discomfortText.text = "DISCOMFORT 0 / 100";
+            EnsureTextOutline(discomfortText);
+
+            Slider discomfortSlider = EnsureDiscomfortSlider(canvasObject.transform);
+            Text gameOverText = EnsureUiText(
+                canvasObject.transform,
+                "GameOverText",
+                new Vector2(0.15f, 0.35f),
+                new Vector2(0.85f, 0.65f),
+                72,
+                TextAnchor.MiddleCenter);
+            gameOverText.text = "GAME OVER";
+            gameOverText.color = new Color(1f, 0.25f, 0.2f);
+            EnsureTextOutline(gameOverText);
+            gameOverText.transform.SetAsLastSibling();
+            gameOverText.gameObject.SetActive(gameStateManager.IsGameOver);
+
+            DiscomfortUI ui = GetOrAddComponent<DiscomfortUI>(canvasObject);
+            ui.Configure(
+                discomfortManager,
+                gameStateManager,
+                discomfortText,
+                discomfortSlider,
+                gameOverText);
+
+            EditorUtility.SetDirty(canvasObject);
+            EditorUtility.SetDirty(ui);
+            EditorUtility.SetDirty(discomfortText);
+            EditorUtility.SetDirty(discomfortSlider);
+            EditorUtility.SetDirty(gameOverText);
+        }
+
+        private static Slider EnsureDiscomfortSlider(Transform parent)
+        {
+            GameObject sliderObject = GetOrCreateUiObject(parent, "DiscomfortSlider");
+            SetUiAnchors(
+                sliderObject.GetComponent<RectTransform>(),
+                new Vector2(0.25f, 0.86f),
+                new Vector2(0.75f, 0.90f));
+
+            Image background = GetOrAddComponent<Image>(sliderObject);
+            background.color = new Color(0.12f, 0.14f, 0.18f, 0.95f);
+
+            Transform fillTransform = sliderObject.transform.Find("Fill");
+            GameObject fillObject = fillTransform != null
+                ? fillTransform.gameObject
+                : GetOrCreateUiObject(sliderObject.transform, "Fill");
+            RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+            SetUiAnchors(fillRect, Vector2.zero, Vector2.one);
+            Image fillImage = GetOrAddComponent<Image>(fillObject);
+            fillImage.color = new Color(1f, 0.65f, 0.12f);
+
+            Slider slider = GetOrAddComponent<Slider>(sliderObject);
+            slider.minValue = 0f;
+            slider.maxValue = 100f;
+            slider.value = 0f;
+            slider.wholeNumbers = false;
+            slider.direction = Slider.Direction.LeftToRight;
+            slider.fillRect = fillRect;
+            slider.handleRect = null;
+            slider.targetGraphic = background;
+            slider.interactable = false;
+            return slider;
+        }
+
+        private static Text EnsureUiText(
+            Transform parent,
+            string objectName,
+            Vector2 anchorMin,
+            Vector2 anchorMax,
+            int fontSize,
+            TextAnchor alignment)
+        {
+            GameObject textObject = GetOrCreateUiObject(parent, objectName);
+            SetUiAnchors(textObject.GetComponent<RectTransform>(), anchorMin, anchorMax);
+            Text text = GetOrAddComponent<Text>(textObject);
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = fontSize;
+            text.alignment = alignment;
+            text.color = Color.white;
+            text.raycastTarget = false;
+            return text;
+        }
+
+        private static void EnsureTextOutline(Text text)
+        {
+            Outline outline = GetOrAddComponent<Outline>(text.gameObject);
+            outline.effectColor = new Color(0f, 0f, 0f, 0.9f);
+            outline.effectDistance = new Vector2(2f, -2f);
+            outline.useGraphicAlpha = true;
+        }
+
+        private static GameObject GetOrCreateUiObject(Transform parent, string objectName)
+        {
+            Transform existing = parent.Find(objectName);
+            if (existing != null)
+            {
+                return existing.gameObject;
+            }
+
+            var uiObject = new GameObject(objectName, typeof(RectTransform));
+            uiObject.transform.SetParent(parent, false);
+            return uiObject;
+        }
+
+        private static void SetUiAnchors(
+            RectTransform rectTransform,
+            Vector2 anchorMin,
+            Vector2 anchorMax)
+        {
+            rectTransform.anchorMin = anchorMin;
+            rectTransform.anchorMax = anchorMax;
+            rectTransform.offsetMin = Vector2.zero;
+            rectTransform.offsetMax = Vector2.zero;
+            rectTransform.localScale = Vector3.one;
+        }
+
+        private static T GetOrAddComponent<T>(GameObject target)
+            where T : Component
+        {
+            T component = target.GetComponent<T>();
+            return component != null ? component : target.AddComponent<T>();
         }
 
         private static NPCController CreateOrUpdateNpcPrefab()
@@ -607,10 +793,14 @@ namespace Nyoice.Editor
 
         private static void ConfigureNpcPrefab(GameObject npcRoot)
         {
-            if (npcRoot.GetComponent<NPCMovement>() == null)
+            NPCMovement npcMovement = npcRoot.GetComponent<NPCMovement>();
+            if (npcMovement == null)
             {
-                npcRoot.AddComponent<NPCMovement>();
+                npcMovement = npcRoot.AddComponent<NPCMovement>();
             }
+
+            npcMovement.ConfigureSpeed(NpcMovementSpeed);
+            EditorUtility.SetDirty(npcMovement);
 
             NPCController npcController = npcRoot.GetComponent<NPCController>();
             if (npcController == null)
@@ -618,7 +808,7 @@ namespace Nyoice.Editor
                 npcController = npcRoot.AddComponent<NPCController>();
             }
 
-            npcController.ConfigureUrinationDuration(3f);
+            npcController.ConfigureUrinationDuration(NpcUrinationDurationSeconds);
             EditorUtility.SetDirty(npcController);
 
             Rigidbody body = npcRoot.GetComponent<Rigidbody>();
