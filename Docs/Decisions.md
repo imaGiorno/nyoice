@@ -110,3 +110,8 @@
 - Combo uses a fixed stage index for `×1.0`, `×1.5`, `×2.0`, `×2.5`, and `×3.0`. Each uninterrupted five-second no-adjacency interval advances one stage and never exceeds ×3.0.
 - `DiscomfortManager` remains the adjacency authority. A positive adjacent-pair event immediately resets combo and elapsed time, while Reserved urinals remain excluded by the existing Occupied-pair rule.
 - GameOver freezes score state, processed count, combo multiplier, and combo elapsed time.
+
+## Sprint 5-4 decisions
+
+- Each guarded NPC completion at Exit awards `Mathf.RoundToInt(100 × ComboMultiplier)` and emits the existing `ScoreChanged` event after the score is updated.
+- The Sprint 5-3B combo stages, timing, cap, adjacency reset, Reserved behavior, and GameOver freeze remain unchanged.

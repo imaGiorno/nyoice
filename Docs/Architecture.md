@@ -126,3 +126,7 @@ NPC movement defaults to 4.0 units per second and urination defaults to six seco
 `ScoreManager` owns score display state, processed-NPC count, the no-adjacency timer, and a fixed combo-stage index. `DiscomfortManager.AdjacentPairCountChanged` remains the single authority for adjacency: any positive Occupied pair count resets the multiplier to ×1.0 and clears elapsed time. Reserved urinals do not reset it. Every uninterrupted five seconds with zero adjacent pairs advances through `×1.0, ×1.5, ×2.0, ×2.5, ×3.0`, capped at ×3.0.
 
 `NPCController` retains a one-shot completion notification at its guarded `Leaving -> Finished` transition for processed-NPC tracking and future scoring integration. Base points, award timing, calculation, and fractional rounding are unconfirmed, so the notification does not add score. No score state, processed count, combo time, or multiplier changes after GameOver. `ScoreUI` presents initial `SCORE 0` and the fixed `COMBO` multiplier in the existing Runtime uGUI canvas.
+
+## Sprint 5-4 score award flow
+
+The guarded NPC completion notification now awards `Mathf.RoundToInt(100 × ComboMultiplier)` when the NPC reaches Exit. `ScoreManager` updates the processed count and score before raising one `ScoreChanged` event, so the existing Runtime uGUI presenter refreshes the total immediately. The combo timing, stages, cap, adjacency reset, Reserved exclusion, and GameOver freeze behavior are unchanged.
