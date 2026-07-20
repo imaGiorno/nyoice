@@ -6,6 +6,7 @@ namespace Nyoice.Managers
     [DisallowMultipleComponent]
     public sealed class ScoreManager : MonoBehaviour
     {
+        private const int BaseScore = 100;
         private const float ComboStepSeconds = 5f;
 
         private static readonly float[] ComboStages =
@@ -34,7 +35,7 @@ namespace Nyoice.Managers
         public int ProcessedNpcCount { get; private set; }
         public float NoAdjacencyElapsed { get; private set; }
         public float NoAdjacencySecondsPerCombo => ComboStepSeconds;
-        public bool IsBaseScoreConfigured => false;
+        public int BaseScoreValue => BaseScore;
 
         private void OnEnable()
         {
@@ -99,6 +100,7 @@ namespace Nyoice.Managers
             }
 
             ProcessedNpcCount++;
+            CurrentScore += Mathf.RoundToInt(BaseScore * ComboMultiplier);
             ScoreChanged?.Invoke();
             return true;
         }

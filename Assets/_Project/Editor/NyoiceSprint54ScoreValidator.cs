@@ -9,12 +9,12 @@ using UnityEngine.UI;
 
 namespace Nyoice.Editor
 {
-    public static class NyoiceSprint53BScoreValidator
+    public static class NyoiceSprint54ScoreValidator
     {
-        [MenuItem("Nyoice/Validate Sprint5-3B Score Flow")]
+        [MenuItem("Nyoice/Validate Sprint5-4 Score Award")]
         public static void ValidateScoreFlow()
         {
-            var root = new GameObject("Sprint53BScoreValidation");
+            var root = new GameObject("Sprint54ScoreValidation");
             root.SetActive(false);
             try
             {
@@ -28,24 +28,28 @@ namespace Nyoice.Editor
                 ScoreUI scoreUi = CreateScoreUi(root.transform, score);
                 RequireMultiplier(score, scoreUi, 1.0f, "COMBO ×1.0");
                 Require(score.CurrentScore == 0, "Initial score is not zero.");
-                Require(!score.IsBaseScoreConfigured, "An unconfirmed base score is configured.");
+                Require(score.BaseScoreValue == 100, "Base score is not 100.");
+
+                int expectedTotal = 0;
+                RequireAward(score, scoreUi, 100, ref expectedTotal);
 
                 score.AdvanceTime(4.99f);
                 RequireMultiplier(score, scoreUi, 1.0f, "COMBO ×1.0");
                 score.AdvanceTime(0.01f);
                 RequireMultiplier(score, scoreUi, 1.5f, "COMBO ×1.5");
+                RequireAward(score, scoreUi, 150, ref expectedTotal);
                 score.AdvanceTime(5f);
                 RequireMultiplier(score, scoreUi, 2.0f, "COMBO ×2.0");
+                RequireAward(score, scoreUi, 200, ref expectedTotal);
                 score.AdvanceTime(5f);
                 RequireMultiplier(score, scoreUi, 2.5f, "COMBO ×2.5");
+                RequireAward(score, scoreUi, 250, ref expectedTotal);
                 score.AdvanceTime(5f);
                 RequireMultiplier(score, scoreUi, 3.0f, "COMBO ×3.0");
+                RequireAward(score, scoreUi, 300, ref expectedTotal);
                 score.AdvanceTime(50f);
                 RequireMultiplier(score, scoreUi, 3.0f, "COMBO ×3.0");
-
-                Require(score.NotifyNpcFinished(), "Finished NPC notification was rejected.");
-                Require(score.ProcessedNpcCount == 1, "Finished NPC count was not recorded.");
-                Require(score.CurrentScore == 0, "Unconfirmed base score changed the score.");
+                Require(score.ProcessedNpcCount == 5, "Finished NPC count was not recorded.");
 
                 NPCController first = CreateNpc(root.transform, "NPC_001");
                 NPCController second = CreateNpc(root.transform, "NPC_002");
@@ -57,6 +61,7 @@ namespace Nyoice.Editor
 
                 score.AdvanceTime(20f);
                 RequireMultiplier(score, scoreUi, 1.0f, "COMBO ×1.0");
+                RequireAward(score, scoreUi, 100, ref expectedTotal);
                 Require(urinals[1].Release(second), "Validation urinal release failed.");
                 Require(urinals[0].Release(first), "Validation urinal release failed.");
                 discomfort.AdvanceTime(0.01f);
@@ -71,11 +76,9 @@ namespace Nyoice.Editor
                 score.AdvanceTime(5f);
                 Require(!score.NotifyNpcFinished(), "Finished notification was accepted after GameOver.");
                 RequireMultiplier(score, scoreUi, 1.5f, "COMBO ×1.5");
-                Require(score.CurrentScore == 0 && score.ProcessedNpcCount == 1,
+                Require(score.CurrentScore == expectedTotal && score.ProcessedNpcCount == 6,
                     "GameOver changed score or processed count.");
-                Debug.LogWarning(
-                    "Sprint 5-3B: base score, award timing, calculation, and rounding remain unconfirmed; scoring is disabled.");
-                Debug.Log("Sprint 5-3B score flow validation passed.");
+                Debug.Log("Sprint 5-4 score award validation passed.");
             }
             finally
             {
@@ -112,6 +115,24 @@ namespace Nyoice.Editor
                 $"Expected multiplier {expectedMultiplier:0.0} but found {scoreManager.ComboMultiplier:0.0}.");
             Require(scoreUi.DisplayedCombo == expectedText,
                 $"Expected UI '{expectedText}' but found '{scoreUi.DisplayedCombo}'.");
+        }
+
+        private static void RequireAward(
+            ScoreManager scoreManager,
+            ScoreUI scoreUi,
+            int expectedAward,
+            ref int expectedTotal)
+        {
+            int scoreBefore = scoreManager.CurrentScore;
+            Require(scoreManager.NotifyNpcFinished(), "Finished NPC notification was rejected.");
+            int actualAward = scoreManager.CurrentScore - scoreBefore;
+            Require(actualAward == expectedAward,
+                $"Expected score award {expectedAward} but found {actualAward}.");
+            expectedTotal += expectedAward;
+            Require(scoreManager.CurrentScore == expectedTotal,
+                $"Expected total score {expectedTotal} but found {scoreManager.CurrentScore}.");
+            Require(scoreUi.DisplayedScore == $"SCORE {expectedTotal}",
+                $"Score UI did not update to SCORE {expectedTotal}.");
         }
 
         private static UrinalController[] CreateUrinals(Transform root)
