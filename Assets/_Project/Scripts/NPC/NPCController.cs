@@ -23,6 +23,7 @@ namespace Nyoice.NPC
         private UrinalManager _urinalManager;
         private UrinalTicketManager _ticketManager;
         private GameStateManager _gameStateManager;
+        private ScoreManager _scoreManager;
         private Transform _exitPoint;
         private Renderer[] _renderers;
         private Collider[] _colliders;
@@ -127,6 +128,11 @@ namespace Nyoice.NPC
                     HandleGameOver();
                 }
             }
+        }
+
+        public void ConfigureScore(ScoreManager scoreManager)
+        {
+            _scoreManager = scoreManager;
         }
 
         public void WaitInternally()
@@ -440,6 +446,7 @@ namespace Nyoice.NPC
             _movement.Stop();
             Log($"{name} reached ExitPoint");
             SetState(NPCState.Finished);
+            _scoreManager?.NotifyNpcFinished();
             _destroyScheduled = true;
             Log($"{name} destroyed");
 

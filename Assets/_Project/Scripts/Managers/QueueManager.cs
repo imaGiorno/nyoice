@@ -34,6 +34,9 @@ namespace Nyoice.Managers
         private GameStateManager gameStateManager;
 
         [SerializeField]
+        private ScoreManager scoreManager;
+
+        [SerializeField]
         private bool enableQueueDebugLogs = true;
 
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
@@ -93,6 +96,11 @@ namespace Nyoice.Managers
             SubscribeToGameState();
         }
 
+        public void ConfigureScore(ScoreManager configuredScoreManager)
+        {
+            scoreManager = configuredScoreManager;
+        }
+
         public void Enqueue(NPCController npc)
         {
             if (npc == null || IsProgressionBlocked)
@@ -102,6 +110,7 @@ namespace Nyoice.Managers
             }
 
             npc.ConfigureGameState(gameStateManager);
+            npc.ConfigureScore(scoreManager);
             npc.Initialize(this);
             npc.ConfigureUrinalFlow(urinalManager, ticketManager);
             npc.ConfigureExitFlow(exitPoint);
