@@ -103,3 +103,10 @@
 - GameOver is one-shot and clamps discomfort to 100 before notifying listeners. The UI receives both value and state events so `100 / 100` and `GAME OVER` remain synchronized.
 - The status HUD uses standard uGUI and the built-in legacy runtime font. No external font, asset, package, IMGUI, or restart control is introduced.
 - NPC movement defaults to 4.0 units per second and urination to six seconds. This creates a visible Occupied overlap without changing queue, line, urinal, MovePoint, or UsePoint coordinates.
+
+## Sprint 5-3B decisions
+
+- The guarded `Finished` transition retains a one-shot completion notification and increments the processed-NPC count. It does not award points while base points, award timing, calculation, and fractional rounding remain unconfirmed.
+- Combo uses a fixed stage index for `×1.0`, `×1.5`, `×2.0`, `×2.5`, and `×3.0`. Each uninterrupted five-second no-adjacency interval advances one stage and never exceeds ×3.0.
+- `DiscomfortManager` remains the adjacency authority. A positive adjacent-pair event immediately resets combo and elapsed time, while Reserved urinals remain excluded by the existing Occupied-pair rule.
+- GameOver freezes score state, processed count, combo multiplier, and combo elapsed time.

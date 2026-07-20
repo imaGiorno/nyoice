@@ -120,3 +120,9 @@ The default rate is ten points per pair per second. Reserved and Available urina
 NPC movement defaults to 4.0 units per second and urination defaults to six seconds. Setup reapplies both values to an existing NPC prefab without changing stage or waypoint coordinates.
 
 `DiscomfortUI` is a Runtime uGUI presenter. Setup creates or repairs `UI/DiscomfortCanvas` with `DiscomfortText`, `DiscomfortSlider/Fill`, and `GameOverText`. It subscribes to discomfort and GameOver events, continues to show `100 / 100`, and displays `GAME OVER` at the center of the GameView.
+
+## Sprint 5-3B score and combo flow
+
+`ScoreManager` owns score display state, processed-NPC count, the no-adjacency timer, and a fixed combo-stage index. `DiscomfortManager.AdjacentPairCountChanged` remains the single authority for adjacency: any positive Occupied pair count resets the multiplier to ×1.0 and clears elapsed time. Reserved urinals do not reset it. Every uninterrupted five seconds with zero adjacent pairs advances through `×1.0, ×1.5, ×2.0, ×2.5, ×3.0`, capped at ×3.0.
+
+`NPCController` retains a one-shot completion notification at its guarded `Leaving -> Finished` transition for processed-NPC tracking and future scoring integration. Base points, award timing, calculation, and fractional rounding are unconfirmed, so the notification does not add score. No score state, processed count, combo time, or multiplier changes after GameOver. `ScoreUI` presents initial `SCORE 0` and the fixed `COMBO` multiplier in the existing Runtime uGUI canvas.

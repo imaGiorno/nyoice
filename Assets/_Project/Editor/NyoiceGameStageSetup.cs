@@ -565,6 +565,9 @@ namespace Nyoice.Editor
             DiscomfortManager discomfortManager = GetOrCreateChildComponent<DiscomfortManager>(
                 gameSystems.transform,
                 "DiscomfortManager");
+            ScoreManager scoreManager = GetOrCreateChildComponent<ScoreManager>(
+                gameSystems.transform,
+                "ScoreManager");
 
             AudioSource audioSource = urinalManager.GetComponent<AudioSource>();
             if (audioSource == null)
@@ -581,10 +584,13 @@ namespace Nyoice.Editor
             queueManager.ConfigureUrinalFlow(urinalManager, ticketManager, approachPoint, crossingTarget);
             queueManager.ConfigureExitFlow(exitPoint);
             queueManager.ConfigureGameState(gameStateManager);
+            queueManager.ConfigureScore(scoreManager);
             spawner.Configure(npcPrefab, spawnPoint, queueManager);
             spawner.ConfigureGameState(gameStateManager);
             discomfortManager.Configure(urinals, gameStateManager);
+            scoreManager.Configure(discomfortManager, gameStateManager);
             EnsureDiscomfortUI(discomfortManager, gameStateManager);
+            EnsureScoreUI(scoreManager);
 
             EditorUtility.SetDirty(queueManager);
             EditorUtility.SetDirty(spawner);
@@ -592,7 +598,46 @@ namespace Nyoice.Editor
             EditorUtility.SetDirty(ticketManager);
             EditorUtility.SetDirty(gameStateManager);
             EditorUtility.SetDirty(discomfortManager);
+            EditorUtility.SetDirty(scoreManager);
             EditorUtility.SetDirty(audioSource);
+        }
+
+        private static void EnsureScoreUI(ScoreManager scoreManager)
+        {
+            GameObject uiRoot = GameObject.Find("UI");
+            if (uiRoot == null)
+            {
+                uiRoot = new GameObject("UI");
+            }
+
+            Transform canvasTransform = uiRoot.transform.Find("DiscomfortCanvas");
+            if (canvasTransform == null)
+            {
+                return;
+            }
+
+            Text scoreText = EnsureUiText(
+                canvasTransform,
+                "ScoreText",
+                new Vector2(0.02f, 0.90f),
+                new Vector2(0.25f, 0.99f),
+                36,
+                TextAnchor.MiddleLeft);
+            Text comboText = EnsureUiText(
+                canvasTransform,
+                "ComboText",
+                new Vector2(0.75f, 0.90f),
+                new Vector2(0.98f, 0.99f),
+                36,
+                TextAnchor.MiddleRight);
+            EnsureTextOutline(scoreText);
+            EnsureTextOutline(comboText);
+
+            ScoreUI scoreUI = GetOrAddComponent<ScoreUI>(canvasTransform.gameObject);
+            scoreUI.Configure(scoreManager, scoreText, comboText);
+            EditorUtility.SetDirty(scoreUI);
+            EditorUtility.SetDirty(scoreText);
+            EditorUtility.SetDirty(comboText);
         }
 
         private static void EnsureDiscomfortUI(
