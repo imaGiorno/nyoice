@@ -130,3 +130,9 @@ NPC movement defaults to 4.0 units per second and urination defaults to six seco
 ## Sprint 5-4 score award flow
 
 The guarded NPC completion notification now awards `Mathf.RoundToInt(100 × ComboMultiplier)` when the NPC reaches Exit. `ScoreManager` updates the processed count and score before raising one `ScoreChanged` event, so the existing Runtime uGUI presenter refreshes the total immediately. The combo timing, stages, cap, adjacency reset, Reserved exclusion, and GameOver freeze behavior are unchanged.
+
+## Sprint 5-4A initial flow
+
+`QueueManager.Enqueue` always registers each spawned NPC in one FIFO pending list and the existing queue-slot flow. A free selection slot is offered to the oldest pending NPC without changing its queue state or movement target. Player input may reserve that NPC's urinal early, but the NPC continues through the ordered queue, DecisionPoint, and NyoiceApproachPoint before moving to its reserved urinal's MovePoint and UsePoint. A newly spawned NPC cannot replace an older selection candidate or bypass waiting NPCs.
+
+`ScoreManager` keeps combo timing stopped at its initial ×1.0 state until the first NPC successfully changes a urinal from Reserved to Occupied at UsePoint. `NPCController` sends that one-shot start notification when it enters `UsingUrinal`. Session reset clears the start flag, elapsed time, multiplier, score, and processed count.

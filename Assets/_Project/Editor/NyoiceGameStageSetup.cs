@@ -17,6 +17,7 @@ namespace Nyoice.Editor
         private const string MenuPath = "Nyoice/Setup Game Stage";
         private const string GameScenePath = "Assets/_Project/Scenes/GameScene.unity";
         private const string NpcPrefabPath = "Assets/_Project/Prefabs/NPC.prefab";
+        private const string MaterialsDirectory = "Assets/_Project/Materials";
         private const int UrinalCount = 8;
 
         private const float UrinalStartX = -5.25f;
@@ -64,6 +65,7 @@ namespace Nyoice.Editor
             EnsureSceneCamera();
             EnsureSceneLight();
             ConfigureStageAndSystems(gameStage.transform, npcPrefab);
+            MigrateSetupRendererMaterials(gameStage.transform);
             SaveSceneAndAssets(gameScene);
             Selection.activeGameObject = gameStage;
             ShowInfo("GameStage and Sprint 5-3A systems are ready.");
@@ -456,14 +458,13 @@ namespace Nyoice.Editor
 
         private static GameObject EnsureHighlight(Transform urinal, Transform body)
         {
-            Transform existingHighlight = urinal.Find("Highlight");
-            if (existingHighlight != null)
+            Transform highlight = urinal.Find("Highlight");
+            if (highlight == null)
             {
-                Object.DestroyImmediate(existingHighlight.gameObject);
+                highlight = new GameObject("Highlight").transform;
+                highlight.SetParent(urinal, false);
             }
 
-            Transform highlight = new GameObject("Highlight").transform;
-            highlight.SetParent(urinal, false);
             float frontZ = body.localPosition.z - ((body.localScale.z * 0.5f) + 0.08f);
             highlight.localPosition = new Vector3(body.localPosition.x, body.localPosition.y, frontZ);
             highlight.localRotation = body.localRotation;
@@ -523,13 +524,7 @@ namespace Nyoice.Editor
             bar.localRotation = Quaternion.identity;
             bar.localScale = localScale;
             Renderer renderer = bar.GetComponent<Renderer>();
-            Shader shader = Shader.Find("Unlit/Color");
-            if (shader != null)
-            {
-                renderer.sharedMaterial = new Material(shader);
-            }
-
-            renderer.sharedMaterial.color = color;
+            SetRendererColor(renderer, color, "Unlit/Color");
             Collider collider = bar.GetComponent<Collider>();
             if (collider != null)
             {
@@ -872,9 +867,12 @@ namespace Nyoice.Editor
                 visual = GameObject.CreatePrimitive(PrimitiveType.Capsule).transform;
                 visual.name = "Visual";
                 visual.SetParent(npcRoot.transform, false);
-                visual.GetComponent<Renderer>().material.color = new Color(0.35f, 0.7f, 0.95f);
             }
 
+            SetRendererColor(
+                visual.GetComponent<Renderer>(),
+                new Color(0.35f, 0.7f, 0.95f),
+                "Standard");
             visual.localPosition = NpcVisualPosition;
             visual.localRotation = Quaternion.identity;
             visual.localScale = NpcVisualScale;
@@ -941,8 +939,77 @@ namespace Nyoice.Editor
             cube.transform.SetParent(parent, false);
             cube.transform.position = position;
             cube.transform.localScale = scale;
-            cube.GetComponent<Renderer>().material.color = color;
+            SetRendererColor(cube.GetComponent<Renderer>(), color);
             return cube;
+        }
+
+        private static void MigrateSetupRendererMaterials(Transform root)
+        {
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                Material current = renderer.sharedMaterial;
+                if (current != null && current.shader != null)
+                {
+                    SetRendererColor(renderer, current.color, current.shader.name);
+                }
+            }
+        }
+
+        private static void SetRendererColor(
+            Renderer renderer,
+            Color color,
+            string shaderName = null)
+        {
+            if (renderer == null)
+            {
+                return;
+            }
+
+            Shader shader = !string.IsNullOrEmpty(shaderName)
+                ? Shader.Find(shaderName)
+                : renderer.sharedMaterial != null
+                    ? renderer.sharedMaterial.shader
+                    : null;
+            if (shader == null)
+            {
+                return;
+            }
+
+            renderer.sharedMaterial = GetOrCreateSetupMaterial(shader, color);
+        }
+
+        private static Material GetOrCreateSetupMaterial(Shader shader, Color color)
+        {
+            Directory.CreateDirectory(MaterialsDirectory);
+            Color32 color32 = color;
+            string shaderToken = shader.name.Replace('/', '-').Replace(' ', '-');
+            string colorToken = $"{color32.r:X2}{color32.g:X2}{color32.b:X2}{color32.a:X2}";
+            string materialPath = $"{MaterialsDirectory}/Setup-{shaderToken}-{colorToken}.mat";
+
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(materialPath);
+            if (material != null)
+            {
+                return material;
+            }
+
+            foreach (string guid in AssetDatabase.FindAssets("t:Material", new[] { MaterialsDirectory }))
+            {
+                string existingPath = AssetDatabase.GUIDToAssetPath(guid);
+                Material existing = AssetDatabase.LoadAssetAtPath<Material>(existingPath);
+                if (existing != null && existing.shader == shader &&
+                    ((Color32)existing.color).Equals(color32))
+                {
+                    return existing;
+                }
+            }
+
+            material = new Material(shader)
+            {
+                name = $"Setup {shader.name} {colorToken}",
+                color = color
+            };
+            AssetDatabase.CreateAsset(material, materialPath);
+            return material;
         }
 
         private static Vector3 GetQueuePosition(int index)

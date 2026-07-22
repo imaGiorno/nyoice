@@ -139,7 +139,13 @@ namespace Nyoice.Toilet
                 return;
             }
 
-            bodyRenderer.material.color = IsAvailable ? _availableColor : DisabledColor;
+            Material targetMaterial = Application.isPlaying
+                ? bodyRenderer.material
+                : bodyRenderer.sharedMaterial;
+            if (targetMaterial != null)
+            {
+                targetMaterial.color = IsAvailable ? _availableColor : DisabledColor;
+            }
         }
     }
 }

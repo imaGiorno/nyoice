@@ -55,6 +55,9 @@ namespace Nyoice.NPC
         public bool IsMovingToExitPoint => _movingToExitPoint;
         public bool IsDestroyScheduled => _destroyScheduled;
         public bool IsGameOver => _gameStateManager != null && _gameStateManager.IsGameOver;
+        public bool CanAcceptUrinalSelection =>
+            !IsGameOver && HasUrinalTicket && TargetUrinal == null &&
+            (State == NPCState.Queue || State == NPCState.FrontWaiting);
 
         private void Awake()
         {
@@ -179,6 +182,32 @@ namespace Nyoice.NPC
             _movement.MoveTo(decisionPosition, HandleDecisionPointReached);
         }
 
+        public bool BeginUrinalSelection()
+        {
+            if (!CanAcceptUrinalSelection)
+            {
+                return false;
+            }
+
+            Log($"{name} ready for early urinal selection while preserving its queue route");
+            return true;
+        }
+
+        public bool AcceptUrinalAssignment(UrinalController urinal)
+        {
+            if (!CanAcceptUrinalSelection || urinal == null ||
+                urinal.State != UrinalState.Reserved || urinal.ReservedBy != this ||
+                urinal.MovePoint == null || urinal.UsePoint == null)
+            {
+                return false;
+            }
+
+            TargetUrinal = urinal;
+            _queueManager?.NotifySelectionZoneCrossed(this);
+            Log($"{name} reserved Urinal{TargetUrinal.UrinalNumber:00} and remains on the FIFO queue route");
+            return true;
+        }
+
         public void BeginUrinalApproach(Vector3 approachPosition, Vector3 crossingTarget)
         {
             if (IsGameOver || State != NPCState.FrontWaiting || !HasUrinalTicket)
@@ -256,6 +285,15 @@ namespace Nyoice.NPC
                 return;
             }
 
+            if (TargetUrinal != null && TargetUrinal.ReservedBy == this)
+            {
+                _queueManager?.NotifyApproachPointReached(this);
+                SetState(NPCState.WalkingToUrinal);
+                Log($"{name} reached ApproachPoint and is moving to Urinal{TargetUrinal.UrinalNumber:00} MovePoint");
+                _movement.MoveTo(TargetUrinal.MovePoint.position, HandleMovePointReached);
+                return;
+            }
+
             _movement.Stop();
             SetState(NPCState.SelectingUrinal);
             Log($"{name} waiting {selectionWaitSeconds:0.##} seconds for urinal selection");
@@ -314,13 +352,29 @@ namespace Nyoice.NPC
             if (!TargetUrinal.Occupy(this))
             {
                 Debug.LogWarning($"{name} could not occupy its reserved urinal.", this);
+                HandleInvalidUrinalAssignment();
                 return;
             }
 
             SetState(NPCState.UsingUrinal);
             Log($"{name} reached Urinal{TargetUrinal.UrinalNumber:00} UsePoint");
             Log($"Urinal{TargetUrinal.UrinalNumber:00} state: Reserved -> Occupied");
+            _scoreManager?.NotifyUrinalUseStarted();
             BeginUrination();
+        }
+
+        private void HandleInvalidUrinalAssignment()
+        {
+            UrinalController invalidUrinal = TargetUrinal;
+            if (invalidUrinal != null && invalidUrinal.ReservedBy == this)
+            {
+                invalidUrinal.Release(this);
+            }
+
+            TargetUrinal = null;
+            ReleaseUrinalTicket();
+            SetState(NPCState.Queue);
+            _queueManager?.Enqueue(this);
         }
 
         public bool BeginUrination()

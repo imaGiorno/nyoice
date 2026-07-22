@@ -72,11 +72,13 @@ namespace Nyoice.Managers
             {
                 Log("LeftArrow pressed");
                 MoveSelection(-1);
+                ConfirmActiveSelection();
             }
             else if (rightPressed)
             {
                 Log("RightArrow pressed");
                 MoveSelection(1);
+                ConfirmActiveSelection();
             }
 
             if (touchPressed)
@@ -229,6 +231,29 @@ namespace Nyoice.Managers
             return selected;
         }
 
+        public bool ConfirmActiveSelection()
+        {
+            NPCController npc = ActiveSelectionNpc;
+            if (npc == null || CurrentSelection == null)
+            {
+                return false;
+            }
+
+            UrinalController confirmedUrinal = ConfirmSelection(npc);
+            if (confirmedUrinal == null)
+            {
+                return false;
+            }
+
+            if (npc.AcceptUrinalAssignment(confirmedUrinal))
+            {
+                return true;
+            }
+
+            confirmedUrinal.Release(npc);
+            return false;
+        }
+
         public void MoveSelection(int direction)
         {
             if (!IsInputEnabled || direction == 0)
@@ -289,7 +314,10 @@ namespace Nyoice.Managers
             }
 
             Log($"Click hit Urinal{urinal.UrinalNumber:00}");
-            SelectUrinal(urinal);
+            if (SelectUrinal(urinal))
+            {
+                ConfirmActiveSelection();
+            }
         }
 
         private void LogIgnoredInput(
