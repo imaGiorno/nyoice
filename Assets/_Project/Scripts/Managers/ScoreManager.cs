@@ -36,6 +36,7 @@ namespace Nyoice.Managers
         public float NoAdjacencyElapsed { get; private set; }
         public float NoAdjacencySecondsPerCombo => ComboStepSeconds;
         public int BaseScoreValue => BaseScore;
+        public bool IsComboTimingStarted { get; private set; }
 
         private void OnEnable()
         {
@@ -65,7 +66,7 @@ namespace Nyoice.Managers
 
         public void AdvanceTime(float deltaSeconds)
         {
-            if (deltaSeconds <= 0f || IsBlocked || HasAdjacency() ||
+            if (deltaSeconds <= 0f || !IsComboTimingStarted || IsBlocked || HasAdjacency() ||
                 _comboStageIndex >= ComboStages.Length - 1)
             {
                 return;
@@ -103,6 +104,29 @@ namespace Nyoice.Managers
             CurrentScore += Mathf.RoundToInt(BaseScore * ComboMultiplier);
             ScoreChanged?.Invoke();
             return true;
+        }
+
+        public bool NotifyUrinalUseStarted()
+        {
+            if (IsBlocked || IsComboTimingStarted)
+            {
+                return false;
+            }
+
+            IsComboTimingStarted = true;
+            NoAdjacencyElapsed = 0f;
+            ScoreChanged?.Invoke();
+            return true;
+        }
+
+        public void ResetSession()
+        {
+            CurrentScore = 0;
+            ProcessedNpcCount = 0;
+            _comboStageIndex = 0;
+            NoAdjacencyElapsed = 0f;
+            IsComboTimingStarted = false;
+            ScoreChanged?.Invoke();
         }
 
         private bool IsBlocked => gameStateManager == null || gameStateManager.IsGameOver;

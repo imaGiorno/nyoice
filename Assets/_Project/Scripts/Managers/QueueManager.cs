@@ -40,17 +40,24 @@ namespace Nyoice.Managers
         private bool enableQueueDebugLogs = true;
 
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
+        private readonly List<NPCController> _pendingNpcs = new List<NPCController>();
         private NPCController _decisionPointOccupant;
         private NPCController _selectionZoneOccupant;
+        private NPCController _approachRouteOccupant;
         private bool _hasLoggedInitializationError;
         private bool _ticketEventSubscribed;
         private bool _gameOverLogged;
 
         public IReadOnlyList<NPCController> InternalWaitingList => _internalWaitingList;
+        public IReadOnlyList<NPCController> PendingNpcs => _pendingNpcs;
         public NPCController SelectionZoneOccupant => _selectionZoneOccupant;
+        public NPCController ApproachRouteOccupant => _approachRouteOccupant;
         public bool IsSelectionZoneOccupied => _selectionZoneOccupant != null;
         public int VisibleNpcCount => GetVisibleNpcCount();
         public bool IsProgressionBlocked => gameStateManager != null && gameStateManager.IsGameOver;
+        public bool HasInitialFlowReferences =>
+            urinalManager != null && ticketManager != null && decisionPoint != null &&
+            nyoiceApproachPoint != null && lineCrossingTarget != null;
 
         private void Awake()
         {
@@ -114,6 +121,7 @@ namespace Nyoice.Managers
             npc.Initialize(this);
             npc.ConfigureUrinalFlow(urinalManager, ticketManager);
             npc.ConfigureExitFlow(exitPoint);
+            _pendingNpcs.Add(npc);
             npc.WaitInternally();
             _internalWaitingList.Add(npc);
 
@@ -121,6 +129,7 @@ namespace Nyoice.Managers
             {
                 ResolveUrinalFlowReferences();
                 CompactQueue();
+                TryOfferSelectionToOldestNpc();
             }
         }
 
@@ -211,8 +220,9 @@ namespace Nyoice.Managers
 
             _selectionZoneOccupant = null;
             urinalManager?.EndSelection(npc);
-            LogQueueEvent($"{npc.name} released SelectionZone");
+            LogQueueEvent($"{npc.name} completed early urinal selection");
             CompactQueue();
+            TryOfferSelectionToOldestNpc();
             return true;
         }
 
@@ -228,6 +238,18 @@ namespace Nyoice.Managers
             _selectionZoneOccupant = npc;
             LogQueueEvent($"{npc.name} entered SelectionZone");
             return true;
+        }
+
+        public void NotifyApproachPointReached(NPCController npc)
+        {
+            if (npc == null || _approachRouteOccupant != npc)
+            {
+                return;
+            }
+
+            _approachRouteOccupant = null;
+            LogQueueEvent($"{npc.name} cleared the shared approach route");
+            CompactQueue();
         }
 
         private void CompactQueue()
@@ -247,6 +269,7 @@ namespace Nyoice.Managers
             }
 
             TryAdmitInternalWaiter();
+            TryOfferSelectionToOldestNpc();
         }
 
         private bool TryStartFrontWaitingNpc()
@@ -257,33 +280,76 @@ namespace Nyoice.Managers
                 return false;
             }
 
-            if (_selectionZoneOccupant != null)
+            if (_approachRouteOccupant != null)
             {
                 return false;
             }
 
+            if (HasValidReservation(npc))
+            {
+                if (nyoiceApproachPoint == null || lineCrossingTarget == null)
+                {
+                    return false;
+                }
+
+                _decisionPointOccupant = null;
+                _pendingNpcs.Remove(npc);
+                _approachRouteOccupant = npc;
+                npc.BeginUrinalApproach(nyoiceApproachPoint.position, lineCrossingTarget.position);
+                return true;
+            }
+
+            TryOfferSelectionToOldestNpc();
+            return false;
+        }
+
+        private bool TryOfferSelectionToOldestNpc()
+        {
             ResolveUrinalFlowReferences();
-            if (urinalManager == null || ticketManager == null ||
-                nyoiceApproachPoint == null || lineCrossingTarget == null)
+            if (_selectionZoneOccupant != null || urinalManager == null ||
+                urinalManager.GetAutomaticSelection() == null || ticketManager == null)
             {
                 return false;
             }
 
-            if (!ticketManager.TryAcquireTicket(npc))
+            NPCController npc = GetOldestSelectionCandidate();
+            if (npc == null || !ticketManager.TryAcquireTicket(npc))
             {
-                return false;
-            }
-
-            if (!TryEnterSelectionZone(npc))
-            {
-                ticketManager.ReleaseTicket(npc);
                 return false;
             }
 
             npc.ConfigureUrinalFlow(urinalManager, ticketManager);
-            _decisionPointOccupant = null;
-            npc.BeginUrinalApproach(nyoiceApproachPoint.position, lineCrossingTarget.position);
+            if (!TryEnterSelectionZone(npc) || !npc.BeginUrinalSelection())
+            {
+                urinalManager.EndSelection(npc);
+                _selectionZoneOccupant = null;
+                ticketManager.ReleaseTicket(npc);
+                return false;
+            }
+
+            LogQueueEvent($"{npc.name} can select a urinal by FIFO priority");
             return true;
+        }
+
+        private NPCController GetOldestSelectionCandidate()
+        {
+            for (int index = 0; index < _pendingNpcs.Count; index++)
+            {
+                NPCController npc = _pendingNpcs[index];
+                if (npc != null && npc.TargetUrinal == null &&
+                    (npc.State == NPCState.Queue || npc.State == NPCState.FrontWaiting))
+                {
+                    return npc;
+                }
+            }
+
+            return null;
+        }
+
+        private bool HasValidReservation(NPCController npc)
+        {
+            return npc != null && npc.TargetUrinal != null &&
+                   npc.TargetUrinal.ReservedBy == npc && npc.HasUrinalTicket;
         }
 
         private bool TryMoveToDecisionPoint()
@@ -501,11 +567,6 @@ namespace Nyoice.Managers
         private int GetVisibleNpcCount()
         {
             var visibleNpcs = new HashSet<NPCController>();
-
-            if (_selectionZoneOccupant != null)
-            {
-                visibleNpcs.Add(_selectionZoneOccupant);
-            }
 
             if (_decisionPointOccupant != null)
             {

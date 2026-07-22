@@ -32,6 +32,7 @@ namespace Nyoice.Editor
 
                 int expectedTotal = 0;
                 RequireAward(score, scoreUi, 100, ref expectedTotal);
+                Require(score.NotifyUrinalUseStarted(), "Combo timing did not start.");
 
                 score.AdvanceTime(4.99f);
                 RequireMultiplier(score, scoreUi, 1.0f, "COMBO ×1.0");

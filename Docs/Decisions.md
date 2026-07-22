@@ -115,3 +115,10 @@
 
 - Each guarded NPC completion at Exit awards `Mathf.RoundToInt(100 × ComboMultiplier)` and emits the existing `ScoreChanged` event after the score is updated.
 - The Sprint 5-3B combo stages, timing, cap, adjacency reset, Reserved behavior, and GameOver freeze remain unchanged.
+
+## Sprint 5-4A decisions
+
+- Early selection uses the existing single selection slot, ticket, reservation, and uGUI input rules. Selection is orthogonal to queue state and does not add a parallel movement system.
+- A confirmed early selection reserves the urinal but never changes the NPC's current queue target. Pending NPCs retain registration-order FIFO and follow Queue, DecisionPoint, ApproachPoint, MovePoint, and UsePoint in sequence.
+- Combo timing starts only on the first successful `Reserved -> Occupied` transition at UsePoint; Spawn, selection, and reservation do not start it.
+- `ScoreManager.ResetSession` restores the score and combo session state, including the new timing-start flag.
