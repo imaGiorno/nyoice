@@ -90,13 +90,17 @@ namespace Nyoice.Managers
         private void SetCurrentDiscomfort(float value)
         {
             float clampedValue = Mathf.Clamp(value, 0f, MaximumDiscomfort);
-            if (Mathf.Approximately(CurrentDiscomfort, clampedValue))
+            bool reachedMaximum = clampedValue >= MaximumDiscomfort;
+            if (Mathf.Approximately(CurrentDiscomfort, clampedValue) && !reachedMaximum)
             {
                 return;
             }
 
-            CurrentDiscomfort = clampedValue;
-            ValueChanged?.Invoke(CurrentDiscomfort);
+            if (CurrentDiscomfort != clampedValue)
+            {
+                CurrentDiscomfort = clampedValue;
+                ValueChanged?.Invoke(CurrentDiscomfort);
+            }
 
             int currentStep = Mathf.FloorToInt(CurrentDiscomfort / LogInterval);
             if (currentStep > _lastLoggedStep)
@@ -105,7 +109,7 @@ namespace Nyoice.Managers
                 Log($"Discomfort: {CurrentDiscomfort:0.0} / {MaximumDiscomfort:0}");
             }
 
-            if (CurrentDiscomfort >= MaximumDiscomfort)
+            if (reachedMaximum)
             {
                 Log("Discomfort reached maximum");
                 gameStateManager.TriggerGameOver();

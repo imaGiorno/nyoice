@@ -42,7 +42,7 @@ namespace Nyoice.Editor
         [MenuItem(MenuPath)]
         public static void SetupGameStage()
         {
-            if (!File.Exists(GameScenePath))
+            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(GameScenePath) == null)
             {
                 ShowWarning("GameScene was not found. Run Nyoice/Setup Sprint 1 first.");
                 return;
@@ -55,7 +55,7 @@ namespace Nyoice.Editor
 
             Scene gameScene = EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
             NPCController npcPrefab = CreateOrUpdateNpcPrefab();
-            GameObject gameStage = GameObject.Find("GameStage");
+            GameObject gameStage = FindRootObject(gameScene, "GameStage");
 
             if (gameStage == null)
             {
@@ -69,6 +69,19 @@ namespace Nyoice.Editor
             SaveSceneAndAssets(gameScene);
             Selection.activeGameObject = gameStage;
             ShowInfo("GameStage and Sprint 5-3A systems are ready.");
+        }
+
+        private static GameObject FindRootObject(Scene scene, string objectName)
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (root.name == objectName)
+                {
+                    return root;
+                }
+            }
+
+            return null;
         }
 
         private static GameObject CreateGameStage()
@@ -147,9 +160,23 @@ namespace Nyoice.Editor
         {
             var label = new GameObject("Number", typeof(TextMesh));
             label.transform.SetParent(parent, false);
-            label.transform.localPosition = new Vector3(0f, 0f, -0.26f);
+            ConfigureNumberLabel(label.transform, number);
+        }
+
+        private static void ConfigureNumberLabel(Transform label, int number)
+        {
+            label.gameObject.SetActive(true);
+            label.gameObject.layer = label.parent.gameObject.layer;
+            label.localPosition = new Vector3(0f, 0f, -0.26f);
+            label.localRotation = Quaternion.identity;
+            label.localScale = Vector3.one;
 
             TextMesh text = label.GetComponent<TextMesh>();
+            if (text == null)
+            {
+                text = label.gameObject.AddComponent<TextMesh>();
+            }
+
             text.text = number.ToString();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.fontSize = 64;
@@ -157,6 +184,10 @@ namespace Nyoice.Editor
             text.anchor = TextAnchor.MiddleCenter;
             text.alignment = TextAlignment.Center;
             text.color = new Color(0.08f, 0.12f, 0.16f);
+            MeshRenderer renderer = label.GetComponent<MeshRenderer>();
+            renderer.sharedMaterial = text.font.material;
+            renderer.sortingOrder = 1;
+            EditorUtility.SetDirty(text);
         }
 
         private static void CreatePartitions(Transform parent)
@@ -404,6 +435,16 @@ namespace Nyoice.Editor
                 body.localPosition = Vector3.zero;
                 body.localRotation = Quaternion.identity;
                 body.localScale = UrinalBodyScale;
+
+                Transform numberLabel = urinal.Find("Number");
+                if (numberLabel == null)
+                {
+                    CreateNumberLabel(urinal, index + 1);
+                }
+                else
+                {
+                    ConfigureNumberLabel(numberLabel, index + 1);
+                }
 
                 BoxCollider bodyCollider = body.GetComponent<BoxCollider>();
                 if (bodyCollider == null)
@@ -947,6 +988,11 @@ namespace Nyoice.Editor
         {
             foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
             {
+                if (renderer.GetComponent<TextMesh>() != null)
+                {
+                    continue;
+                }
+
                 Material current = renderer.sharedMaterial;
                 if (current != null && current.shader != null)
                 {

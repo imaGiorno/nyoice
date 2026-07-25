@@ -115,9 +115,8 @@ namespace Nyoice.Editor
             Require(urinal.IsOccupied, "Urinal08 did not become Occupied.");
 
             NPCController nextNpc = CreateNpc(root, "NPC_002", queueManager, urinalManager, ticketManager, exitPoint);
-            SetPrivateField(queueManager, "_decisionPointOccupant", nextNpc);
-            nextNpc.HandleDecisionPointReached();
-            Require(nextNpc.State == NPCState.FrontWaiting, "Next NPC did not wait at DecisionPoint.");
+            queueManager.Enqueue(nextNpc);
+            Require(nextNpc.State == NPCState.Queue, "Next NPC did not preserve its FIFO queue route.");
             Require(!ticketManager.HasTicket(nextNpc), "Next NPC acquired a Ticket before release.");
 
             bool completed = (bool)CompleteUrinationMethod.Invoke(departingNpc, null);
@@ -131,7 +130,8 @@ namespace Nyoice.Editor
             Require(ticketsAvailableDuringReleaseEvent == 1, "Ticket availability did not increase on release.");
             Require(queueManager.SelectionZoneOccupant == nextNpc, "Next NPC did not enter SelectionZone.");
             Require(ticketManager.HasTicket(nextNpc), "Next NPC did not acquire the returned Ticket.");
-            Require(nextNpc.State == NPCState.ApproachingLine, "Next NPC did not approach NyoiceLine.");
+            Require(nextNpc.State == NPCState.Queue && nextNpc.CanAcceptUrinalSelection,
+                "Next NPC did not become selectable while preserving its FIFO queue route.");
             Require(urinalManager.GetAutomaticSelection() == urinal, "Released urinal is not selectable.");
 
             NPCMovement departingMovement = departingNpc.GetComponent<NPCMovement>();
@@ -284,19 +284,6 @@ namespace Nyoice.Editor
             }
 
             return method;
-        }
-
-        private static void SetPrivateField<T>(object target, string fieldName, T value)
-        {
-            FieldInfo field = target.GetType().GetField(
-                fieldName,
-                BindingFlags.Instance | BindingFlags.NonPublic);
-            if (field == null)
-            {
-                throw new MissingFieldException(target.GetType().FullName, fieldName);
-            }
-
-            field.SetValue(target, value);
         }
 
         private static void Require(bool condition, string message)

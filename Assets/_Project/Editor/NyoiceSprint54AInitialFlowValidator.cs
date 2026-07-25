@@ -4,12 +4,15 @@ using Nyoice.Managers;
 using Nyoice.NPC;
 using Nyoice.Toilet;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 
 namespace Nyoice.Editor
 {
     public static class NyoiceSprint54AInitialFlowValidator
     {
+        private const string GameScenePath = "Assets/_Project/Scenes/GameScene.unity";
         private static readonly MethodInfo MovePointReachedMethod = GetNpcMethod("HandleMovePointReached");
         private static readonly MethodInfo UsePointReachedMethod = GetNpcMethod("HandleUsePointReached");
         private static readonly MethodInfo QueueSlotReachedMethod = GetNpcMethod("HandleQueueSlotReached");
@@ -18,6 +21,8 @@ namespace Nyoice.Editor
         [MenuItem("Nyoice/Validate Sprint5-4A Initial Flow")]
         public static void ValidateInitialFlow()
         {
+            ValidateConfiguredGameScene();
+
             var root = new GameObject("Sprint54AInitialFlowValidation");
             root.SetActive(false);
 
@@ -156,6 +161,95 @@ namespace Nyoice.Editor
             {
                 UnityEngine.Object.DestroyImmediate(root);
             }
+        }
+
+        private static void ValidateConfiguredGameScene()
+        {
+            Require(AssetDatabase.LoadAssetAtPath<SceneAsset>(GameScenePath) != null,
+                "Configured GameScene does not exist. Run Nyoice/Setup Game Stage first.");
+            Scene scene = SceneManager.GetActiveScene().path == GameScenePath
+                ? SceneManager.GetActiveScene()
+                : EditorSceneManager.OpenScene(GameScenePath, OpenSceneMode.Single);
+
+            GameObject gameStage = FindRootObject(scene, "GameStage");
+            Require(gameStage != null,
+                "Configured GameScene has no GameStage. Run Nyoice/Setup Game Stage first.");
+            Transform urinalRoot = gameStage.transform.Find("Urinals");
+            Require(urinalRoot != null,
+                "Configured GameScene has no GameStage/Urinals hierarchy.");
+            UrinalController[] sceneUrinals = urinalRoot.GetComponentsInChildren<UrinalController>(true);
+            Require(sceneUrinals.Length == 8, "Configured GameScene does not contain exactly eight urinals.");
+            Array.Sort(sceneUrinals, (left, right) => left.UrinalNumber.CompareTo(right.UrinalNumber));
+            for (int index = 0; index < sceneUrinals.Length; index++)
+            {
+                UrinalController urinal = sceneUrinals[index];
+                int expectedNumber = index + 1;
+                Require(urinal.UrinalNumber == expectedNumber,
+                    $"Configured urinal number {expectedNumber} is missing or duplicated.");
+                Transform labelTransform = urinal.transform.Find("Number");
+                Require(labelTransform != null, $"Urinal{expectedNumber:00} has no number label.");
+                Require(labelTransform.gameObject.activeInHierarchy,
+                    $"Urinal{expectedNumber:00} number label is inactive.");
+                TextMesh label = labelTransform.GetComponent<TextMesh>();
+                Require(label != null && label.text == expectedNumber.ToString(),
+                    $"Urinal{expectedNumber:00} label does not match UrinalNumber.");
+                MeshRenderer labelRenderer = labelTransform.GetComponent<MeshRenderer>();
+                Require(labelRenderer != null && labelRenderer.enabled && labelRenderer.sharedMaterial == label.font.material,
+                    $"Urinal{expectedNumber:00} number label has an invalid renderer or font material.");
+            }
+
+            GameStateManager gameState = FindSceneComponent<GameStateManager>();
+            DiscomfortManager discomfort = FindSceneComponent<DiscomfortManager>();
+            NPCSpawner spawner = FindSceneComponent<NPCSpawner>();
+            QueueManager queue = FindSceneComponent<QueueManager>();
+            UrinalManager urinalManager = FindSceneComponent<UrinalManager>();
+            ScoreManager score = FindSceneComponent<ScoreManager>();
+            Require(GetPrivateField<GameStateManager>(discomfort, "gameStateManager") == gameState,
+                "GameScene DiscomfortManager is not configured with its GameStateManager.");
+            Require(GetPrivateField<UrinalController[]>(discomfort, "urinals").Length == 8,
+                "GameScene DiscomfortManager is not configured with all urinals.");
+
+            MethodInfo setDiscomfort = typeof(DiscomfortManager).GetMethod(
+                "SetCurrentDiscomfort",
+                BindingFlags.Instance | BindingFlags.NonPublic);
+            Require(setDiscomfort != null, "Discomfort maximum transition method was not found.");
+            setDiscomfort.Invoke(discomfort, new object[] { discomfort.MaxDiscomfort - 0.00001f });
+            setDiscomfort.Invoke(discomfort, new object[] { discomfort.MaxDiscomfort });
+
+            Require(gameState.IsGameOver, "GameScene did not enter GameOver at maximum discomfort.");
+            Require(spawner.IsSpawningBlocked, "GameScene NPC spawning continued after GameOver.");
+            Require(queue.IsProgressionBlocked, "GameScene queue progression continued after GameOver.");
+            Require(!urinalManager.IsInputEnabled, "GameScene urinal input remained enabled after GameOver.");
+            Require(!score.NotifyNpcFinished(), "GameScene score progressed after GameOver.");
+
+            EditorSceneManager.OpenScene(scene.path, OpenSceneMode.Single);
+        }
+
+        private static GameObject FindRootObject(Scene scene, string objectName)
+        {
+            foreach (GameObject root in scene.GetRootGameObjects())
+            {
+                if (root.name == objectName)
+                {
+                    return root;
+                }
+            }
+
+            return null;
+        }
+
+        private static T FindSceneComponent<T>() where T : Component
+        {
+            T component = UnityEngine.Object.FindAnyObjectByType<T>(FindObjectsInactive.Include);
+            Require(component != null, $"Configured GameScene has no {typeof(T).Name}.");
+            return component;
+        }
+
+        private static T GetPrivateField<T>(object target, string fieldName)
+        {
+            FieldInfo field = target.GetType().GetField(fieldName, BindingFlags.Instance | BindingFlags.NonPublic);
+            Require(field != null, $"{target.GetType().Name}.{fieldName} was not found.");
+            return (T)field.GetValue(target);
         }
 
         private static QueueSlot[] CreateQueueSlots(Transform parent)
