@@ -127,7 +127,7 @@ namespace Nyoice.Toilet
         {
             if (highlight != null)
             {
-                highlight.SetActive(selected && IsAvailable);
+                highlight.SetActive(selected && !IsOccupied);
             }
         }
 

@@ -73,9 +73,10 @@ namespace Nyoice.Editor
                     "The first NPC cannot accept urinal selection at spawn.");
                 Require(urinalManager.ActiveSelectionNpc == firstNpc,
                     "Urinal input was not assigned to the spawned NPC.");
-                Require(firstNpc.State == NPCState.Queue && firstNpc.CanAcceptUrinalSelection,
-                    "The spawned NPC cannot select while preserving its queue state.");
-                Require(firstNpc.TargetUrinal == null, "Spawn or ticket acquisition selected a urinal prematurely.");
+                Require(firstNpc.State == NPCState.Queue && firstNpc.CanChangeUrinalAssignment,
+                    "The spawned NPC cannot change its automatic assignment while preserving its queue state.");
+                Require(firstNpc.TargetUrinal == urinals[7] && urinals[7].ReservedBy == firstNpc,
+                    "Spawn or ticket acquisition did not automatically reserve Urinal08.");
                 Require(!scoreManager.IsComboTimingStarted,
                     "Spawn or selection readiness started combo timing.");
 
@@ -89,8 +90,8 @@ namespace Nyoice.Editor
                     "A newer NPC replaced the oldest selection candidate.");
 
                 UrinalController selectedUrinal = urinals[7];
-                Require(urinalManager.SelectUrinal(selectedUrinal), "Urinal08 could not be selected.");
-                Require(urinalManager.ConfirmActiveSelection(), "The selected urinal could not be assigned.");
+                Require(urinalManager.SelectUrinal(selectedUrinal), "Urinal08 could not remain selected.");
+                Require(urinalManager.ConfirmActiveSelection(), "The automatic urinal assignment was not retained.");
                 Require(firstNpc.TargetUrinal == selectedUrinal && selectedUrinal.ReservedBy == firstNpc,
                     "The spawn-time urinal selection was not reflected on the NPC.");
                 Require(firstNpc.State == NPCState.Queue,
@@ -98,11 +99,11 @@ namespace Nyoice.Editor
                 NPCMovement movement = firstNpc.GetComponent<NPCMovement>();
                 Require(movement.IsMoving && movement.TargetPosition != selectedUrinal.MovePoint.position,
                     "Urinal assignment created a Spawn-to-MovePoint shortcut.");
-                Require(queueManager.SelectionZoneOccupant == secondNpc,
-                    "The oldest remaining NPC did not receive the next selection opportunity.");
+                Require(queueManager.SelectionZoneOccupant == firstNpc,
+                    "Selection control was released before the first NPC passed DecisionPoint.");
                 NPCController thirdNpc = CreateNpc(root.transform, "NPC_003");
                 queueManager.Enqueue(thirdNpc);
-                Require(queueManager.SelectionZoneOccupant == secondNpc &&
+                Require(queueManager.SelectionZoneOccupant == firstNpc &&
                         queueManager.PendingNpcs[2] == thirdNpc,
                     "A newly spawned NPC overtook an older waiting NPC.");
                 Require(!scoreManager.IsComboTimingStarted,
@@ -131,6 +132,8 @@ namespace Nyoice.Editor
                         movement.TargetPosition == approachPoint.position &&
                         queueManager.ApproachRouteOccupant == firstNpc,
                     "The reserved NPC did not continue from DecisionPoint to ApproachPoint.");
+                Require(queueManager.SelectionZoneOccupant == secondNpc,
+                    "The oldest remaining NPC did not receive selection after DecisionPoint passage.");
                 ApproachPointReachedMethod.Invoke(firstNpc, null);
                 Require(firstNpc.State == NPCState.WalkingToUrinal &&
                         movement.TargetPosition == selectedUrinal.MovePoint.position &&
