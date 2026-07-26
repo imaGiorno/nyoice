@@ -9,6 +9,9 @@ namespace Nyoice.NPC
     [RequireComponent(typeof(NPCMovement))]
     public sealed class NPCController : MonoBehaviour
     {
+        public const float DefaultMinimumUrinationDuration = 2f;
+        public const float DefaultMaximumUrinationDuration = 10f;
+
         [SerializeField]
         private bool enableStateLogs = true;
 
@@ -16,7 +19,10 @@ namespace Nyoice.NPC
         private float selectionWaitSeconds = 2f;
 
         [SerializeField, Min(0.1f)]
-        private float urinationDurationSeconds = 6f;
+        private float minimumUrinationDurationSeconds = DefaultMinimumUrinationDuration;
+
+        [SerializeField, Min(0.1f)]
+        private float maximumUrinationDurationSeconds = DefaultMaximumUrinationDuration;
 
         private NPCMovement _movement;
         private QueueManager _queueManager;
@@ -29,13 +35,13 @@ namespace Nyoice.NPC
         private Collider[] _colliders;
         private Vector3 _lineCrossingTarget;
         private Coroutine _selectionWaitRoutine;
-        private Coroutine _urinationRoutine;
         private bool _urinationStarted;
         private bool _leavingStarted;
         private bool _exitStartReached;
         private bool _movingToExitPoint;
         private bool _finished;
         private bool _destroyScheduled;
+        private bool _hasAssignedUrinationDuration;
 
         public QueueSlot CurrentSlot { get; private set; }
         public UrinalController TargetUrinal { get; private set; }
@@ -46,10 +52,15 @@ namespace Nyoice.NPC
         public bool IsPresentationVisible { get; private set; } = true;
         public bool HasUrinalTicket => _ticketManager != null && _ticketManager.HasTicket(this);
         public float SelectionWaitSeconds => selectionWaitSeconds;
-        public float UrinationDurationSeconds => urinationDurationSeconds;
+        public float UrinationDurationSeconds => AssignedUrinationDuration;
+        public float MinimumUrinationDuration => minimumUrinationDurationSeconds;
+        public float MaximumUrinationDuration => maximumUrinationDurationSeconds;
+        public float AssignedUrinationDuration { get; private set; }
+        public float RemainingUrinationTime { get; private set; }
         public float UrinationElapsed { get; private set; }
         public bool IsUrinationComplete => State == NPCState.ReadyToLeave;
         public bool IsUrinationTimerStarted => _urinationStarted;
+        public bool IsUrinationStarted => _urinationStarted;
         public Transform ExitPoint => _exitPoint;
         public bool IsLeavingStarted => _leavingStarted;
         public bool IsMovingToExitPoint => _movingToExitPoint;
@@ -65,6 +76,12 @@ namespace Nyoice.NPC
         private void Awake()
         {
             EnsureComponentReferences();
+            AssignUrinationDurationOnce();
+        }
+
+        private void Update()
+        {
+            AdvanceUrinationTime(Time.deltaTime);
         }
 
         private void OnEnable()
@@ -94,6 +111,7 @@ namespace Nyoice.NPC
         {
             _queueManager = queueManager;
             EnsureComponentReferences();
+            AssignUrinationDurationOnce();
             SetState(NPCState.Queue);
         }
 
@@ -107,7 +125,18 @@ namespace Nyoice.NPC
 
         public void ConfigureUrinationDuration(float durationSeconds)
         {
-            urinationDurationSeconds = Mathf.Max(0.1f, durationSeconds);
+            float safeDuration = Mathf.Max(0.1f, durationSeconds);
+            minimumUrinationDurationSeconds = safeDuration;
+            maximumUrinationDurationSeconds = safeDuration;
+            AssignedUrinationDuration = safeDuration;
+            RemainingUrinationTime = safeDuration;
+            _hasAssignedUrinationDuration = true;
+        }
+
+        public void ConfigureUrinationDurationRange(float minimumSeconds, float maximumSeconds)
+        {
+            minimumUrinationDurationSeconds = Mathf.Max(DefaultMinimumUrinationDuration, minimumSeconds);
+            maximumUrinationDurationSeconds = Mathf.Max(minimumUrinationDurationSeconds, maximumSeconds);
         }
 
         public void ConfigureExitFlow(Transform exitPoint)
@@ -154,6 +183,7 @@ namespace Nyoice.NPC
             IsWaitingAtSlot = false;
             TargetUrinal = null;
             UrinationElapsed = 0f;
+            RemainingUrinationTime = AssignedUrinationDuration;
             SetState(NPCState.Queue);
             SetPresentationVisible(false);
         }
@@ -422,22 +452,26 @@ namespace Nyoice.NPC
 
             _urinationStarted = true;
             UrinationElapsed = 0f;
+            RemainingUrinationTime = AssignedUrinationDuration;
             Log($"{name} started urination at Urinal{TargetUrinal.UrinalNumber:00}");
-            Log($"{name} urination time: {urinationDurationSeconds:0.0} seconds");
-
-            if (Application.isPlaying)
-            {
-                _urinationRoutine = StartCoroutine(WaitForUrinationCompletion());
-            }
+            Log($"{name} urination time: {AssignedUrinationDuration:0.0} seconds");
 
             return true;
         }
 
-        private IEnumerator WaitForUrinationCompletion()
+        public void AdvanceUrinationTime(float deltaTime)
         {
-            yield return new WaitForSeconds(urinationDurationSeconds);
-            _urinationRoutine = null;
-            CompleteUrination();
+            if (IsGameOver || !_urinationStarted || State != NPCState.UsingUrinal || deltaTime <= 0f)
+            {
+                return;
+            }
+
+            RemainingUrinationTime = Mathf.Max(0f, RemainingUrinationTime - deltaTime);
+            UrinationElapsed = AssignedUrinationDuration - RemainingUrinationTime;
+            if (RemainingUrinationTime <= 0f)
+            {
+                CompleteUrination();
+            }
         }
 
         private bool CompleteUrination()
@@ -449,7 +483,8 @@ namespace Nyoice.NPC
                 return false;
             }
 
-            UrinationElapsed = urinationDurationSeconds;
+            RemainingUrinationTime = 0f;
+            UrinationElapsed = AssignedUrinationDuration;
             Log($"{name} completed urination");
             SetState(NPCState.ReadyToLeave);
             BeginLeaving();
@@ -579,6 +614,26 @@ namespace Nyoice.NPC
             }
         }
 
+        private void AssignUrinationDurationOnce()
+        {
+            if (_hasAssignedUrinationDuration)
+            {
+                return;
+            }
+
+            minimumUrinationDurationSeconds = Mathf.Max(
+                DefaultMinimumUrinationDuration,
+                minimumUrinationDurationSeconds);
+            maximumUrinationDurationSeconds = Mathf.Max(
+                minimumUrinationDurationSeconds,
+                maximumUrinationDurationSeconds);
+            AssignedUrinationDuration = Random.Range(
+                minimumUrinationDurationSeconds,
+                maximumUrinationDurationSeconds);
+            RemainingUrinationTime = AssignedUrinationDuration;
+            _hasAssignedUrinationDuration = true;
+        }
+
         private void CancelSelectionWait()
         {
             if (_selectionWaitRoutine != null)
@@ -590,16 +645,6 @@ namespace Nyoice.NPC
 
         private void CancelUrinationTimer()
         {
-            if (_urinationRoutine != null)
-            {
-                StopCoroutine(_urinationRoutine);
-                _urinationRoutine = null;
-            }
-
-            if (State == NPCState.UsingUrinal)
-            {
-                _urinationStarted = false;
-            }
         }
 
         private void SetState(NPCState nextState)

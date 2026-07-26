@@ -1,15 +1,14 @@
-using System.Collections;
 using Nyoice.NPC;
 using UnityEngine;
 
 namespace Nyoice.Managers
 {
-    /// <summary>
-    /// Spawns an NPC every three seconds and hands it to the queue.
-    /// </summary>
     [DisallowMultipleComponent]
     public sealed class NPCSpawner : MonoBehaviour
     {
+        public const float DefaultMinimumSpawnInterval = 1f;
+        public const float DefaultMaximumSpawnInterval = 5f;
+
         [SerializeField]
         private NPCController npcPrefab;
 
@@ -22,12 +21,25 @@ namespace Nyoice.Managers
         [SerializeField]
         private GameStateManager gameStateManager;
 
-        [SerializeField, Min(0.1f)]
-        private float spawnIntervalSeconds = 3f;
+        [SerializeField, Min(0.01f)]
+        private float minimumSpawnIntervalSeconds = DefaultMinimumSpawnInterval;
+
+        [SerializeField, Min(0.01f)]
+        private float maximumSpawnIntervalSeconds = DefaultMaximumSpawnInterval;
 
         private int _spawnedNpcCount;
+        private float _nextSpawnInterval;
+        private float _remainingSpawnTime;
+        private int _spawnScheduleVersion;
+        private bool _hasScheduledSpawn;
 
         public bool IsSpawningBlocked => gameStateManager != null && gameStateManager.IsGameOver;
+        public float MinimumSpawnInterval => minimumSpawnIntervalSeconds;
+        public float MaximumSpawnInterval => maximumSpawnIntervalSeconds;
+        public float NextSpawnInterval => _nextSpawnInterval;
+        public float RemainingSpawnTime => _remainingSpawnTime;
+        public int SpawnScheduleVersion => _spawnScheduleVersion;
+        public bool HasScheduledSpawn => _hasScheduledSpawn;
 
         private void OnDestroy()
         {
@@ -44,6 +56,12 @@ namespace Nyoice.Managers
             queueManager = manager;
         }
 
+        public void ConfigureSpawnIntervalRange(float minimumSeconds, float maximumSeconds)
+        {
+            minimumSpawnIntervalSeconds = Mathf.Max(DefaultMinimumSpawnInterval, minimumSeconds);
+            maximumSpawnIntervalSeconds = Mathf.Max(minimumSpawnIntervalSeconds, maximumSeconds);
+        }
+
         public void ConfigureGameState(GameStateManager configuredGameStateManager)
         {
             UnsubscribeFromGameState();
@@ -56,29 +74,53 @@ namespace Nyoice.Managers
             }
         }
 
-        private IEnumerator Start()
+        private void Start()
         {
             ResolveRuntimeReferences();
             SubscribeToGameState();
-            if (npcPrefab == null || spawnPoint == null || queueManager == null || !queueManager.EnsureRuntimeReferences())
+            NormalizeSpawnIntervalRange();
+            if (npcPrefab == null || spawnPoint == null || queueManager == null ||
+                !queueManager.EnsureRuntimeReferences())
             {
                 Debug.LogError("NPCSpawner could not initialize its prefab, SpawnPoint, or QueueManager.", this);
                 enabled = false;
-                yield break;
+                return;
             }
 
-            var wait = new WaitForSeconds(spawnIntervalSeconds);
+            ScheduleNextSpawn();
+        }
 
-            while (true)
+        private void Update()
+        {
+            AdvanceSpawnTimer(Time.deltaTime);
+        }
+
+        public void AdvanceSpawnTimer(float deltaTime)
+        {
+            if (IsSpawningBlocked || !_hasScheduledSpawn || deltaTime <= 0f)
             {
-                yield return wait;
-                if (IsSpawningBlocked)
-                {
-                    yield break;
-                }
+                return;
+            }
 
+            _remainingSpawnTime = Mathf.Max(0f, _remainingSpawnTime - deltaTime);
+            if (_remainingSpawnTime <= 0f)
+            {
                 SpawnNpc();
             }
+        }
+
+        public void ScheduleNextSpawn()
+        {
+            if (IsSpawningBlocked)
+            {
+                return;
+            }
+
+            NormalizeSpawnIntervalRange();
+            _nextSpawnInterval = Random.Range(minimumSpawnIntervalSeconds, maximumSpawnIntervalSeconds);
+            _remainingSpawnTime = _nextSpawnInterval;
+            _hasScheduledSpawn = true;
+            _spawnScheduleVersion++;
         }
 
         private void SpawnNpc()
@@ -100,6 +142,13 @@ namespace Nyoice.Managers
             _spawnedNpcCount++;
             npc.name = $"NPC_{_spawnedNpcCount:000}";
             queueManager.Enqueue(npc);
+            ScheduleNextSpawn();
+        }
+
+        private void NormalizeSpawnIntervalRange()
+        {
+            minimumSpawnIntervalSeconds = Mathf.Max(DefaultMinimumSpawnInterval, minimumSpawnIntervalSeconds);
+            maximumSpawnIntervalSeconds = Mathf.Max(minimumSpawnIntervalSeconds, maximumSpawnIntervalSeconds);
         }
 
         private void ResolveRuntimeReferences()
@@ -140,7 +189,6 @@ namespace Nyoice.Managers
 
         private void HandleGameOver()
         {
-            StopAllCoroutines();
             enabled = false;
             Debug.Log("NPCSpawner stopped because game is over", this);
         }

@@ -122,3 +122,10 @@
 - A confirmed early selection reserves the urinal but never changes the NPC's current queue target. Pending NPCs retain registration-order FIFO and follow Queue, DecisionPoint, ApproachPoint, MovePoint, and UsePoint in sequence.
 - Combo timing starts only on the first successful `Reserved -> Occupied` transition at UsePoint; Spawn, selection, and reservation do not start it.
 - `ScoreManager.ResetSession` restores the score and combo session state, including the new timing-start flag.
+
+## ADR-0006 排尿時間は5マスのゲージで表示する
+
+- 状態: 採用
+- 判断: 正確な秒数は表示せず、5マス、1マス2秒で表現する。端数は`Image.fillAmount`による部分充填で示す。Spawn時点から予定排尿時間を表示し、排尿開始後は残り時間に応じて減少させる。
+- 理由: 数字を直接見せず視覚的に判断させ、NPC同士の排尿時間を素早く比較できるようにする。2～10秒と5マスを自然に対応させ、パズル・シミュレーション性を高める。
+- 影響: 将来10秒を超える排尿時間を採用する場合は表示仕様を再検討する。小数秒は正確な数字ではなく部分マスとして伝える。
