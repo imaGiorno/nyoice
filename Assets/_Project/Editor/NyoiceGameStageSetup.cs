@@ -33,7 +33,6 @@ namespace Nyoice.Editor
         private const float CrossingTargetX = 5.8f;
         private const float SpawnPointY = 4.5f;
         private const float NpcMovementSpeed = 4f;
-        private const float NpcUrinationDurationSeconds = 6f;
 
         private static readonly Vector3 UrinalBodyScale = new Vector3(1f, 1.2f, 0.5f);
         private static readonly Vector3 NpcVisualScale = new Vector3(0.12f, 0.45f, 0.3f);
@@ -622,6 +621,9 @@ namespace Nyoice.Editor
             queueManager.ConfigureGameState(gameStateManager);
             queueManager.ConfigureScore(scoreManager);
             spawner.Configure(npcPrefab, spawnPoint, queueManager);
+            spawner.ConfigureSpawnIntervalRange(
+                NPCSpawner.DefaultMinimumSpawnInterval,
+                NPCSpawner.DefaultMaximumSpawnInterval);
             spawner.ConfigureGameState(gameStateManager);
             discomfortManager.Configure(urinals, gameStateManager);
             scoreManager.Configure(discomfortManager, gameStateManager);
@@ -889,7 +891,9 @@ namespace Nyoice.Editor
                 npcController = npcRoot.AddComponent<NPCController>();
             }
 
-            npcController.ConfigureUrinationDuration(NpcUrinationDurationSeconds);
+            npcController.ConfigureUrinationDurationRange(
+                NPCController.DefaultMinimumUrinationDuration,
+                NPCController.DefaultMaximumUrinationDuration);
             EditorUtility.SetDirty(npcController);
 
             Rigidbody body = npcRoot.GetComponent<Rigidbody>();
@@ -917,6 +921,86 @@ namespace Nyoice.Editor
             visual.localPosition = NpcVisualPosition;
             visual.localRotation = Quaternion.identity;
             visual.localScale = NpcVisualScale;
+
+            EnsureUrinationGauge(npcRoot, npcController);
+        }
+
+        private static void EnsureUrinationGauge(GameObject npcRoot, NPCController npcController)
+        {
+            Transform gaugeTransform = npcRoot.transform.Find("UrinationGauge");
+            GameObject gaugeObject;
+            if (gaugeTransform == null)
+            {
+                gaugeObject = new GameObject("UrinationGauge", typeof(RectTransform), typeof(Canvas));
+                gaugeObject.transform.SetParent(npcRoot.transform, false);
+            }
+            else
+            {
+                gaugeObject = gaugeTransform.gameObject;
+            }
+
+            RectTransform gaugeRect = GetOrAddComponent<RectTransform>(gaugeObject);
+            gaugeRect.localPosition = new Vector3(0.38f, 0.58f, -0.5f);
+            gaugeRect.localRotation = Quaternion.identity;
+            gaugeRect.localScale = Vector3.one * 0.01f;
+            gaugeRect.sizeDelta = new Vector2(18f, 110f);
+
+            Canvas canvas = GetOrAddComponent<Canvas>(gaugeObject);
+            canvas.renderMode = RenderMode.WorldSpace;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 20;
+
+            Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            var fills = new Image[UrinationTimeGauge.SegmentCount];
+            const float segmentWidth = 14f;
+            const float segmentHeight = 18f;
+            const float gap = 4f;
+            float totalHeight = (segmentHeight * UrinationTimeGauge.SegmentCount) +
+                                (gap * (UrinationTimeGauge.SegmentCount - 1));
+            float startY = -totalHeight * 0.5f + segmentHeight * 0.5f;
+
+            for (int index = 0; index < UrinationTimeGauge.SegmentCount; index++)
+            {
+                string cellName = $"Cell{index + 1:00}";
+                Transform cellTransform = gaugeObject.transform.Find(cellName);
+                GameObject cellObject = cellTransform != null
+                    ? cellTransform.gameObject
+                    : new GameObject(cellName, typeof(RectTransform), typeof(Image));
+                cellObject.transform.SetParent(gaugeObject.transform, false);
+                RectTransform cellRect = GetOrAddComponent<RectTransform>(cellObject);
+                cellRect.anchorMin = cellRect.anchorMax = new Vector2(0.5f, 0.5f);
+                cellRect.sizeDelta = new Vector2(segmentWidth, segmentHeight);
+                cellRect.anchoredPosition = new Vector2(0f, startY + index * (segmentHeight + gap));
+                Image background = GetOrAddComponent<Image>(cellObject);
+                background.sprite = uiSprite;
+                background.type = Image.Type.Sliced;
+                background.color = new Color(0.08f, 0.12f, 0.18f, 0.9f);
+                background.raycastTarget = false;
+
+                Transform fillTransform = cellObject.transform.Find("Fill");
+                GameObject fillObject = fillTransform != null
+                    ? fillTransform.gameObject
+                    : new GameObject("Fill", typeof(RectTransform), typeof(Image));
+                fillObject.transform.SetParent(cellObject.transform, false);
+                RectTransform fillRect = GetOrAddComponent<RectTransform>(fillObject);
+                fillRect.anchorMin = Vector2.zero;
+                fillRect.anchorMax = Vector2.one;
+                fillRect.offsetMin = Vector2.one * 2f;
+                fillRect.offsetMax = Vector2.one * -2f;
+                Image fill = GetOrAddComponent<Image>(fillObject);
+                fill.sprite = uiSprite;
+                fill.type = Image.Type.Filled;
+                fill.fillMethod = Image.FillMethod.Vertical;
+                fill.fillOrigin = (int)Image.OriginVertical.Bottom;
+                fill.color = new Color(0.2f, 0.85f, 1f, 1f);
+                fill.raycastTarget = false;
+                fills[index] = fill;
+            }
+
+            UrinationTimeGauge gauge = GetOrAddComponent<UrinationTimeGauge>(gaugeObject);
+            gauge.Configure(npcController, canvas, fills);
+            EditorUtility.SetDirty(gauge);
+            EditorUtility.SetDirty(canvas);
         }
 
         private static T GetOrCreateChildComponent<T>(Transform parent, string childName)

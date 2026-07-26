@@ -47,8 +47,13 @@ namespace Nyoice.Editor
                 Mathf.Approximately(timingNpc.GetComponent<NPCMovement>().Speed, 4f),
                 "Default NPC movement speed is not 4.0.");
             Require(
-                Mathf.Approximately(timingNpc.UrinationDurationSeconds, 6f),
-                "Default urination duration is not six seconds.");
+                Mathf.Approximately(
+                    timingNpc.MinimumUrinationDuration,
+                    NPCController.DefaultMinimumUrinationDuration) &&
+                Mathf.Approximately(
+                    timingNpc.MaximumUrinationDuration,
+                    NPCController.DefaultMaximumUrinationDuration),
+                "Default urination duration range is not 2.0 to 10.0 seconds.");
 
             Require(
                 Mathf.Approximately(discomfortManager.CurrentDiscomfort, 0f),
