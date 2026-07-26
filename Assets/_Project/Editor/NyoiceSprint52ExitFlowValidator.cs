@@ -101,6 +101,8 @@ namespace Nyoice.Editor
             Require(urinalManager.SelectUrinal(urinal), "Urinal08 selection failed.");
 
             departingNpc.BeginUrinalApproach(approachPoint.position, crossingTarget.position);
+            Require(queueManager.NotifySelectionZoneCrossed(departingNpc),
+                "DecisionPoint passage did not release SelectionZone.");
             ApproachPointReachedMethod.Invoke(departingNpc, null);
             CompleteSelectionWaitMethod.Invoke(departingNpc, null);
             departingNpc.HandleNyoiceLineCrossed();
@@ -123,16 +125,18 @@ namespace Nyoice.Editor
             Require(completed, "Urination completion failed.");
             Require(departingNpc.State == NPCState.Leaving, "ReadyToLeave did not advance to Leaving.");
             Require(departingNpc.IsLeavingStarted, "Leaving guard was not set.");
-            Require(urinal.IsAvailable, "Urinal was not released when leaving began.");
-            Require(urinal.ReservedBy == null, "Released urinal still has a user.");
+            Require(urinal.State == UrinalState.Reserved && urinal.ReservedBy == nextNpc,
+                "Released urinal was not atomically handed to the next NPC.");
             Require(!ticketManager.HasTicket(departingNpc), "Departing NPC still holds its Ticket.");
             Require(ticketReleasedEventCount == 1, "TicketReleased did not fire exactly once.");
-            Require(ticketsAvailableDuringReleaseEvent == 1, "Ticket availability did not increase on release.");
+            Require(ticketsAvailableDuringReleaseEvent == 1,
+                "Ticket availability did not increase at the release notification boundary.");
             Require(queueManager.SelectionZoneOccupant == nextNpc, "Next NPC did not enter SelectionZone.");
             Require(ticketManager.HasTicket(nextNpc), "Next NPC did not acquire the returned Ticket.");
-            Require(nextNpc.State == NPCState.Queue && nextNpc.CanAcceptUrinalSelection,
-                "Next NPC did not become selectable while preserving its FIFO queue route.");
-            Require(urinalManager.GetAutomaticSelection() == urinal, "Released urinal is not selectable.");
+            Require(nextNpc.State == NPCState.Queue && nextNpc.CanChangeUrinalAssignment,
+                "Next NPC did not receive an automatic assignment while preserving its FIFO queue route.");
+            Require(nextNpc.TargetUrinal == urinal && urinal.ReservedBy == nextNpc,
+                "Released urinal was not automatically reserved by the next NPC.");
 
             NPCMovement departingMovement = departingNpc.GetComponent<NPCMovement>();
             Require(departingMovement.IsMoving, "Leaving NPC did not start moving.");

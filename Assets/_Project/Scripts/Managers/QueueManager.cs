@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Nyoice.NPC;
+using Nyoice.Toilet;
 using UnityEngine;
 
 namespace Nyoice.Managers
@@ -296,10 +297,11 @@ namespace Nyoice.Managers
                 _pendingNpcs.Remove(npc);
                 _approachRouteOccupant = npc;
                 npc.BeginUrinalApproach(nyoiceApproachPoint.position, lineCrossingTarget.position);
+                NotifySelectionZoneCrossed(npc);
                 return true;
             }
 
-            TryOfferSelectionToOldestNpc();
+            TryRecoverInvalidReservation(npc);
             return false;
         }
 
@@ -319,7 +321,8 @@ namespace Nyoice.Managers
             }
 
             npc.ConfigureUrinalFlow(urinalManager, ticketManager);
-            if (!TryEnterSelectionZone(npc) || !npc.BeginUrinalSelection())
+            if (!TryEnterSelectionZone(npc) || !npc.BeginUrinalSelection() ||
+                !urinalManager.TryAssignAutomatic(npc))
             {
                 urinalManager.EndSelection(npc);
                 _selectionZoneOccupant = null;
@@ -349,7 +352,31 @@ namespace Nyoice.Managers
         private bool HasValidReservation(NPCController npc)
         {
             return npc != null && npc.TargetUrinal != null &&
-                   npc.TargetUrinal.ReservedBy == npc && npc.HasUrinalTicket;
+                   npc.TargetUrinal.State == UrinalState.Reserved &&
+                   npc.TargetUrinal.ReservedBy == npc && npc.HasUrinalTicket &&
+                   npc.TargetUrinal.MovePoint != null && npc.TargetUrinal.UsePoint != null;
+        }
+
+        private bool TryRecoverInvalidReservation(NPCController npc)
+        {
+            if (npc == null || urinalManager == null || !npc.HasUrinalTicket ||
+                (npc.State != NPCState.Queue && npc.State != NPCState.FrontWaiting))
+            {
+                return false;
+            }
+
+            UrinalController invalid = npc.TargetUrinal;
+            if (invalid != null && invalid.ReservedBy == npc)
+            {
+                invalid.Release(npc);
+            }
+
+            if (!npc.ClearInvalidUrinalAssignment())
+            {
+                return false;
+            }
+
+            return urinalManager.TryAssignAutomatic(npc);
         }
 
         private bool TryMoveToDecisionPoint()

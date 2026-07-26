@@ -58,6 +58,9 @@ namespace Nyoice.NPC
         public bool CanAcceptUrinalSelection =>
             !IsGameOver && HasUrinalTicket && TargetUrinal == null &&
             (State == NPCState.Queue || State == NPCState.FrontWaiting);
+        public bool CanChangeUrinalAssignment =>
+            !IsGameOver && HasUrinalTicket && TargetUrinal != null &&
+            (State == NPCState.Queue || State == NPCState.FrontWaiting);
 
         private void Awake()
         {
@@ -203,8 +206,45 @@ namespace Nyoice.NPC
             }
 
             TargetUrinal = urinal;
-            _queueManager?.NotifySelectionZoneCrossed(this);
             Log($"{name} reserved Urinal{TargetUrinal.UrinalNumber:00} and remains on the FIFO queue route");
+            return true;
+        }
+
+        public bool ReplaceUrinalAssignment(UrinalController expectedCurrent, UrinalController replacement)
+        {
+            if (!CanChangeUrinalAssignment || TargetUrinal != expectedCurrent || replacement == null ||
+                replacement.State != UrinalState.Reserved || replacement.ReservedBy != this ||
+                replacement.MovePoint == null || replacement.UsePoint == null)
+            {
+                return false;
+            }
+
+            TargetUrinal = replacement;
+            Log($"{name} changed assignment from Urinal{expectedCurrent.UrinalNumber:00} " +
+                $"to Urinal{replacement.UrinalNumber:00}");
+            return true;
+        }
+
+        public bool ClearInvalidUrinalAssignment()
+        {
+            if (IsGameOver || (State != NPCState.Queue && State != NPCState.FrontWaiting))
+            {
+                return false;
+            }
+
+            TargetUrinal = null;
+            return true;
+        }
+
+        public bool RestoreUrinalAssignment(UrinalController expectedCurrent, UrinalController previous)
+        {
+            if (IsGameOver || TargetUrinal != expectedCurrent || previous == null ||
+                (State != NPCState.Queue && State != NPCState.FrontWaiting))
+            {
+                return false;
+            }
+
+            TargetUrinal = previous;
             return true;
         }
 
@@ -228,11 +268,7 @@ namespace Nyoice.NPC
             }
 
             Log($"{name} crossed NyoiceLine");
-            UrinalController confirmedUrinal = _urinalManager != null
-                ? _urinalManager.ConfirmSelection(this)
-                : null;
-
-            if (confirmedUrinal == null)
+            if (TargetUrinal == null || TargetUrinal.ReservedBy != this)
             {
                 _movement.Stop();
                 ReleaseUrinalTicket();
@@ -241,8 +277,6 @@ namespace Nyoice.NPC
                 return;
             }
 
-            TargetUrinal = confirmedUrinal;
-            _queueManager?.NotifySelectionZoneCrossed(this);
             SetState(NPCState.WalkingToUrinal);
             Log($"{name} moving to Urinal{TargetUrinal.UrinalNumber:00} MovePoint");
             _movement.MoveTo(TargetUrinal.MovePoint.position, HandleMovePointReached);

@@ -144,7 +144,7 @@ namespace Nyoice.Managers
             for (int number = UrinalCount; number >= 1; number--)
             {
                 UrinalController urinal = GetUrinal(number);
-                if (urinal != null && urinal.IsAvailable)
+                if (IsReservationCandidate(urinal))
                 {
                     available.Add(urinal);
                 }
@@ -161,22 +161,42 @@ namespace Nyoice.Managers
 
         public bool SelectUrinal(UrinalController urinal)
         {
-            if (!IsInputEnabled || ActiveSelectionNpc == null || urinal == null || !urinal.IsAvailable)
+            if (!IsInputEnabled || ActiveSelectionNpc == null || urinal == null)
             {
                 return false;
             }
 
-            if (CurrentSelection == urinal)
+            if (ActiveSelectionNpc.TargetUrinal == urinal)
             {
                 return true;
             }
 
-            ClearSelection();
-            CurrentSelection = urinal;
-            CurrentSelection.SetSelected(true);
-            PlaySelectionSound();
-            Log($"Urinal{urinal.UrinalNumber:00} selected for {ActiveSelectionNpc.name}");
-            return true;
+            if (ActiveSelectionNpc.TargetUrinal == null)
+            {
+                if (!IsReservationCandidate(urinal))
+                {
+                    return false;
+                }
+
+                if (ActiveSelectionNpc.CanAcceptUrinalSelection)
+                {
+                    if (!urinal.Reserve(ActiveSelectionNpc))
+                    {
+                        return false;
+                    }
+
+                    if (!ActiveSelectionNpc.AcceptUrinalAssignment(urinal))
+                    {
+                        urinal.Release(ActiveSelectionNpc);
+                        return false;
+                    }
+                }
+
+                ShowAssignment(urinal);
+                return true;
+            }
+
+            return TryChangeAssignment(ActiveSelectionNpc, urinal);
         }
 
         public bool BeginSelection(NPCController npc)
@@ -213,45 +233,96 @@ namespace Nyoice.Managers
                 return null;
             }
 
-            UrinalController selected = CurrentSelection;
-            if (selected == null || !selected.IsAvailable)
+            if (npc.TargetUrinal != null)
             {
-                selected = GetAutomaticSelection();
+                return npc.TargetUrinal;
             }
 
-            if (selected == null || !selected.Reserve(npc))
+            UrinalController selected = CurrentSelection;
+            if (!npc.CanAcceptUrinalSelection || !IsReservationCandidate(selected) ||
+                !selected.Reserve(npc))
             {
-                ClearSelection();
                 return null;
             }
 
-            ClearSelection();
-            Log($"{npc.name} confirmed Urinal{selected.UrinalNumber:00}");
-            Log($"{npc.name} reserved Urinal{selected.UrinalNumber:00}");
+            if (!npc.AcceptUrinalAssignment(selected))
+            {
+                selected.Release(npc);
+                return null;
+            }
+
+            ShowAssignment(selected);
             return selected;
         }
 
         public bool ConfirmActiveSelection()
         {
             NPCController npc = ActiveSelectionNpc;
-            if (npc == null || CurrentSelection == null)
+            return npc != null && ConfirmSelection(npc) != null;
+        }
+
+        public bool TryAssignAutomatic(NPCController npc)
+        {
+            if (!IsInputEnabled || npc == null || ActiveSelectionNpc != npc ||
+                !npc.CanAcceptUrinalSelection)
             {
                 return false;
             }
 
-            UrinalController confirmedUrinal = ConfirmSelection(npc);
-            if (confirmedUrinal == null)
+            UrinalController selected = GetAutomaticSelection();
+            if (selected == null || !selected.Reserve(npc))
             {
                 return false;
             }
 
-            if (npc.AcceptUrinalAssignment(confirmedUrinal))
+            if (!npc.AcceptUrinalAssignment(selected))
+            {
+                selected.Release(npc);
+                return false;
+            }
+
+            ShowAssignment(selected);
+            Log($"{npc.name} automatically reserved Urinal{selected.UrinalNumber:00}");
+            return true;
+        }
+
+        public bool TryChangeAssignment(NPCController npc, UrinalController replacement)
+        {
+            if (!IsInputEnabled || npc == null || npc != ActiveSelectionNpc ||
+                !npc.CanChangeUrinalAssignment || replacement == null)
+            {
+                return false;
+            }
+
+            UrinalController previous = npc.TargetUrinal;
+            if (replacement == previous)
             {
                 return true;
             }
 
-            confirmedUrinal.Release(npc);
-            return false;
+            if (!IsReservationCandidate(replacement) || !replacement.Reserve(npc))
+            {
+                return false;
+            }
+
+            if (!npc.ReplaceUrinalAssignment(previous, replacement))
+            {
+                replacement.Release(npc);
+                return false;
+            }
+
+            if (!previous.Release(npc))
+            {
+                npc.RestoreUrinalAssignment(replacement, previous);
+                replacement.Release(npc);
+                ShowAssignment(previous);
+                return false;
+            }
+
+            ShowAssignment(replacement);
+            PlaySelectionSound();
+            Log($"{npc.name} reassigned to Urinal{replacement.UrinalNumber:00}");
+            return true;
         }
 
         public void MoveSelection(int direction)
@@ -261,14 +332,10 @@ namespace Nyoice.Managers
                 return;
             }
 
-            if (CurrentSelection == null || !CurrentSelection.IsAvailable)
-            {
-                SelectUrinal(GetAutomaticSelection());
-                return;
-            }
-
             int step = direction < 0 ? -1 : 1;
-            int number = CurrentSelection.UrinalNumber;
+            int number = ActiveSelectionNpc != null && ActiveSelectionNpc.TargetUrinal != null
+                ? ActiveSelectionNpc.TargetUrinal.UrinalNumber
+                : UrinalCount;
             for (int attempt = 0; attempt < UrinalCount; attempt++)
             {
                 number += step;
@@ -282,7 +349,7 @@ namespace Nyoice.Managers
                 }
 
                 UrinalController candidate = GetUrinal(number);
-                if (candidate != null && candidate.IsAvailable)
+                if (IsReservationCandidate(candidate))
                 {
                     SelectUrinal(candidate);
                     return;
@@ -307,7 +374,7 @@ namespace Nyoice.Managers
             }
 
             UrinalController urinal = hit.collider.GetComponentInParent<UrinalController>();
-            if (urinal == null || !urinal.IsAvailable)
+            if (urinal == null)
             {
                 Log("Click did not hit a selectable urinal");
                 return;
@@ -358,6 +425,19 @@ namespace Nyoice.Managers
             }
 
             return null;
+        }
+
+        private static bool IsReservationCandidate(UrinalController urinal)
+        {
+            return urinal != null && urinal.IsAvailable && urinal.ReservedBy == null &&
+                   urinal.MovePoint != null && urinal.UsePoint != null;
+        }
+
+        private void ShowAssignment(UrinalController urinal)
+        {
+            ClearSelection();
+            CurrentSelection = urinal;
+            CurrentSelection?.SetSelected(true);
         }
 
         private void ClearSelection()
