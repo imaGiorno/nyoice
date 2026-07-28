@@ -123,6 +123,13 @@
 - Combo timing starts only on the first successful `Reserved -> Occupied` transition at UsePoint; Spawn, selection, and reservation do not start it.
 - `ScoreManager.ResetSession` restores the score and combo session state, including the new timing-start flag.
 
+## ADR-0008: ゲーム画面を32 PPU基準のレトロドットへ段階移行する
+
+- 状態: 採用
+- 判断: 32 PPUを基準とし、Point Filter、Compression None、Mip Map OFFでSpriteをImportする。RuntimeとVisualを分離し、LegacyVisualを残して段階移行する。外部Pixel Perfect Packageは追加しない。
+- 理由: Nyoiceのコミカルな題材と相性が良く、アート全体を統一しやすい。既存ロジックへの影響を抑えながら正式アートを段階的に差し替えられる。
+- 影響: Sprite Import設定を統一し、正式アートは32 PPU前提で制作する。LegacyVisualの削除は全差し替え完了後の別Sprintで行う。
+
 ## ADR-0006 排尿時間は5マスのゲージで表示する
 
 - 状態: 採用
