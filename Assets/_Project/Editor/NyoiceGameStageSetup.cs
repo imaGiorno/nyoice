@@ -41,6 +41,8 @@ namespace Nyoice.Editor
         [MenuItem(MenuPath)]
         public static void SetupGameStage()
         {
+            NyoicePixelArtSetup.EnsureFolders();
+
             if (AssetDatabase.LoadAssetAtPath<SceneAsset>(GameScenePath) == null)
             {
                 ShowWarning("GameScene was not found. Run Nyoice/Setup Sprint 1 first.");
@@ -106,6 +108,7 @@ namespace Nyoice.Editor
 
         private static void ConfigureStageAndSystems(Transform gameStage, NPCController npcPrefab)
         {
+            NyoicePixelArtSetup.EnsureEnvironmentVisual(gameStage);
             Transform urinalRoot = GetOrCreateGroup("Urinals", gameStage);
             Transform entranceRoot = GetOrCreateGroup("Entrance", gameStage);
             Transform queueRoot = GetOrCreateGroup("Queue", gameStage);
@@ -475,6 +478,7 @@ namespace Nyoice.Editor
                     new Vector3(GetUrinalX(index) - 0.45f, 1.35f, 0f),
                     Color.cyan);
 
+                Renderer visualRenderer = NyoicePixelArtSetup.EnsureUrinalVisuals(urinal, body);
                 GameObject highlight = EnsureHighlight(urinal, body);
                 UrinalController controller = urinal.GetComponent<UrinalController>();
                 if (controller == null)
@@ -488,7 +492,7 @@ namespace Nyoice.Editor
                     usePoint,
                     exitStartPoint,
                     highlight,
-                    body.GetComponent<Renderer>());
+                    visualRenderer != null ? visualRenderer : body.GetComponent<Renderer>());
                 EditorUtility.SetDirty(controller);
                 controllers[index] = controller;
             }
@@ -505,15 +509,46 @@ namespace Nyoice.Editor
                 highlight.SetParent(urinal, false);
             }
 
+            ConfigureUrinalHighlightLayout(
+                urinal,
+                body,
+                highlight,
+                NyoicePixelArtSetup.UsePixelVisuals);
+            highlight.gameObject.SetActive(false);
+            return highlight.gameObject;
+        }
+
+        public static void ConfigureUrinalHighlightLayout(
+            Transform urinal,
+            Transform body,
+            Transform highlight,
+            bool usePixelVisual)
+        {
+            const float pixelFrameScale = 1.1f;
+            Vector3 center = body.localPosition;
+            Quaternion rotation = body.localRotation;
             float frontZ = body.localPosition.z - ((body.localScale.z * 0.5f) + 0.08f);
-            highlight.localPosition = new Vector3(body.localPosition.x, body.localPosition.y, frontZ);
-            highlight.localRotation = body.localRotation;
+            float outerWidth = body.localScale.x + 0.3f;
+            float outerHeight = body.localScale.y + 0.3f;
+
+            SpriteRenderer pixelRenderer = urinal.Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
+            if (usePixelVisual && pixelRenderer != null && pixelRenderer.sprite != null)
+            {
+                Vector2 spriteSize = pixelRenderer.sprite.bounds.size;
+                Vector3 pixelScale = pixelRenderer.transform.localScale;
+                outerWidth = spriteSize.x * Mathf.Abs(pixelScale.x) * pixelFrameScale;
+                outerHeight = spriteSize.y * Mathf.Abs(pixelScale.y) * pixelFrameScale;
+                center = pixelRenderer.transform.localPosition;
+                rotation = pixelRenderer.transform.localRotation;
+                frontZ = center.z - 0.08f;
+            }
+
+            highlight.localPosition = new Vector3(center.x, center.y, frontZ);
+            highlight.localRotation = rotation;
             highlight.localScale = Vector3.one;
 
             const float borderThickness = 0.12f;
             const float borderDepth = 0.06f;
-            float outerWidth = body.localScale.x + 0.3f;
-            float outerHeight = body.localScale.y + 0.3f;
             Color yellow = new Color(1f, 0.82f, 0.05f);
 
             EnsureHighlightBar(
@@ -541,8 +576,6 @@ namespace Nyoice.Editor
                 new Vector3(borderThickness, outerHeight, borderDepth),
                 yellow);
 
-            highlight.gameObject.SetActive(false);
-            return highlight.gameObject;
         }
 
         private static void EnsureHighlightBar(
@@ -922,6 +955,8 @@ namespace Nyoice.Editor
             visual.localRotation = Quaternion.identity;
             visual.localScale = NpcVisualScale;
 
+            NyoicePixelArtSetup.EnsureNpcVisuals(npcRoot);
+
             EnsureUrinationGauge(npcRoot, npcController);
         }
 
@@ -948,7 +983,7 @@ namespace Nyoice.Editor
             Canvas canvas = GetOrAddComponent<Canvas>(gaugeObject);
             canvas.renderMode = RenderMode.WorldSpace;
             canvas.overrideSorting = true;
-            canvas.sortingOrder = 20;
+            canvas.sortingOrder = NyoicePixelArtSetup.GaugeOrder;
 
             Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
             var fills = new Image[UrinationTimeGauge.SegmentCount];
@@ -1072,7 +1107,7 @@ namespace Nyoice.Editor
         {
             foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
             {
-                if (renderer.GetComponent<TextMesh>() != null)
+                if (renderer is SpriteRenderer || renderer.GetComponent<TextMesh>() != null)
                 {
                     continue;
                 }
@@ -1154,15 +1189,18 @@ namespace Nyoice.Editor
 
         private static void EnsureSceneCamera()
         {
-            if (Camera.main != null)
+            Camera camera = Camera.main;
+            if (camera != null)
             {
+                camera.orthographic = true;
+                EditorUtility.SetDirty(camera);
                 return;
             }
 
             var cameraObject = new GameObject("Main Camera", typeof(Camera));
             cameraObject.tag = "MainCamera";
             cameraObject.transform.position = new Vector3(0f, 0f, -10f);
-            Camera camera = cameraObject.GetComponent<Camera>();
+            camera = cameraObject.GetComponent<Camera>();
             camera.orthographic = true;
             camera.orthographicSize = 6f;
             camera.clearFlags = CameraClearFlags.SolidColor;
