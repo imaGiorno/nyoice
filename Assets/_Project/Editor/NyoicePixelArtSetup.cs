@@ -33,6 +33,7 @@ namespace Nyoice.Editor
         public const int NpcPixelVisualScale = 2;
         public const int UrinalPixelVisualScale = 2;
         public const int EnvironmentPixelVisualScale = 2;
+        public const float UrinalPixelVisualYOffset = -0.40625f;
 
         private const float PixelsPerUnit = 32f;
         public static readonly Vector3 NpcLegacyVisualScale = new Vector3(0.12f, 0.45f, 0.3f);
@@ -163,7 +164,7 @@ namespace Nyoice.Editor
             SpriteRenderer pixelRenderer = GetOrAddSpriteRenderer(pixel.gameObject);
             pixelRenderer.sprite = AssetDatabase.LoadAssetAtPath<Sprite>(TestUrinalPath);
             pixelRenderer.sortingOrder = UrinalOrder;
-            pixel.localPosition = SnapToPixelGrid(new Vector3(0f, 0f, -0.3f));
+            pixel.localPosition = SnapToPixelGrid(new Vector3(0f, UrinalPixelVisualYOffset, -0.3f));
             pixel.localRotation = Quaternion.identity;
             pixel.localScale = Vector3.one * UrinalPixelVisualScale;
             SetExclusiveVisuals(visualRoot, UsePixelVisuals);
@@ -179,7 +180,8 @@ namespace Nyoice.Editor
             testVisual.localPosition = SnapToPixelGrid(new Vector3(0f, -4.25f, 0.5f));
             testVisual.localRotation = Quaternion.identity;
             testVisual.localScale = Vector3.one * EnvironmentPixelVisualScale;
-            testVisual.gameObject.SetActive(UsePixelVisuals);
+            testVisual.gameObject.SetActive(true);
+            renderer.enabled = false;
         }
 
         public static void SetExclusiveVisuals(Transform visualRoot, bool usePixel)

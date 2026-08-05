@@ -16,10 +16,18 @@ namespace Nyoice.UI
         [SerializeField]
         private Text comboText;
 
+        [SerializeField]
+        private Text processedCountText;
+
+        [SerializeField]
+        private bool useSeparatedLabels;
+
         private bool _isSubscribed;
 
         public string DisplayedScore => scoreText != null ? scoreText.text : string.Empty;
         public string DisplayedCombo => comboText != null ? comboText.text : string.Empty;
+        public string DisplayedProcessedCount =>
+            processedCountText != null ? processedCountText.text : string.Empty;
         public bool IsSubscribed => _isSubscribed;
 
         private void OnEnable()
@@ -34,10 +42,22 @@ namespace Nyoice.UI
 
         public void Configure(ScoreManager manager, Text configuredScoreText, Text configuredComboText)
         {
+            Configure(manager, configuredScoreText, configuredComboText, null, false);
+        }
+
+        public void Configure(
+            ScoreManager manager,
+            Text configuredScoreText,
+            Text configuredComboText,
+            Text configuredProcessedCountText,
+            bool separatedLabels)
+        {
             Unsubscribe();
             scoreManager = manager;
             scoreText = configuredScoreText;
             comboText = configuredComboText;
+            processedCountText = configuredProcessedCountText;
+            useSeparatedLabels = separatedLabels;
             Subscribe();
             Refresh();
         }
@@ -45,9 +65,15 @@ namespace Nyoice.UI
         public bool EnsureRuntimeBindings()
         {
             scoreManager ??= FindAnyObjectByType<ScoreManager>(FindObjectsInactive.Include);
-            scoreText ??= FindChildText("ScoreText");
-            comboText ??= FindChildText("ComboText");
-            if (scoreManager == null || scoreText == null || comboText == null)
+            scoreText ??= FindDescendantText("ScoreText");
+            comboText ??= FindDescendantText("ComboText");
+            if (useSeparatedLabels)
+            {
+                processedCountText ??= FindDescendantText("ProcessedCountText");
+            }
+
+            if (scoreManager == null || scoreText == null || comboText == null ||
+                (useSeparatedLabels && processedCountText == null))
             {
                 Unsubscribe();
                 return false;
@@ -60,15 +86,25 @@ namespace Nyoice.UI
 
         public void Refresh()
         {
+            int score = scoreManager != null ? scoreManager.CurrentScore : 0;
+            float multiplier = scoreManager != null ? scoreManager.ComboMultiplier : 1f;
+            int processedCount = scoreManager != null ? scoreManager.ProcessedNpcCount : 0;
+
             if (scoreText != null)
             {
-                scoreText.text = $"SCORE {scoreManager?.CurrentScore ?? 0}";
+                scoreText.text = useSeparatedLabels ? score.ToString() : $"SCORE {score}";
             }
 
             if (comboText != null)
             {
-                float multiplier = scoreManager != null ? scoreManager.ComboMultiplier : 1f;
-                comboText.text = $"COMBO ×{multiplier:0.0}";
+                comboText.text = useSeparatedLabels
+                    ? $"\u00d7{multiplier:0.0}"
+                    : $"COMBO \u00d7{multiplier:0.0}";
+            }
+
+            if (processedCountText != null)
+            {
+                processedCountText.text = $"{processedCount}\u4eba";
             }
         }
 
@@ -93,10 +129,17 @@ namespace Nyoice.UI
             _isSubscribed = false;
         }
 
-        private Text FindChildText(string childName)
+        private Text FindDescendantText(string childName)
         {
-            Transform child = transform.Find(childName);
-            return child != null ? child.GetComponent<Text>() : null;
+            foreach (Text text in GetComponentsInChildren<Text>(true))
+            {
+                if (text.name == childName)
+                {
+                    return text;
+                }
+            }
+
+            return null;
         }
     }
 }
