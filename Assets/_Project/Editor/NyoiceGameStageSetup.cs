@@ -18,6 +18,11 @@ namespace Nyoice.Editor
         private const string MenuPath = "Nyoice/Setup Game Stage";
         private const string GameScenePath = "Assets/_Project/Scenes/GameScene.unity";
         private const string NpcPrefabPath = "Assets/_Project/Prefabs/NPC.prefab";
+        private const string BusinessSpriteDirectory = "Assets/_Project/Art/Pixel/NPC/Business";
+        private const string BusinessSpriteHolderPath =
+            BusinessSpriteDirectory + "/NPCBusinessSpriteHolder.asset";
+        private const string UrinalSpriteHolderPath =
+            "Assets/_Project/Art/Pixel/Urinals/UrinalSpriteHolder.asset";
         private const string MaterialsDirectory = "Assets/_Project/Materials";
         private const string AudioDirectory = "Assets/_Project/Audio";
         private const string AudioClipHolderPath = AudioDirectory + "/AudioClipHolder.asset";
@@ -443,6 +448,7 @@ namespace Nyoice.Editor
             Transform waypointRoot)
         {
             var controllers = new UrinalController[UrinalCount];
+            UrinalSpriteHolder spriteHolder = EnsureUrinalSpriteHolder();
             for (int index = 0; index < UrinalCount; index++)
             {
                 string urinalName = $"Urinal{index + 1:00}";
@@ -537,11 +543,28 @@ namespace Nyoice.Editor
                     exitStartPoint,
                     highlight,
                     visualRenderer != null ? visualRenderer : body.GetComponent<Renderer>());
+                SpriteRenderer spriteRenderer = urinal
+                    .Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
+                controller.ConfigureSpriteHolder(spriteHolder, spriteRenderer);
                 EditorUtility.SetDirty(controller);
                 controllers[index] = controller;
             }
 
             return controllers;
+        }
+
+        private static UrinalSpriteHolder EnsureUrinalSpriteHolder()
+        {
+            UrinalSpriteHolder holder =
+                AssetDatabase.LoadAssetAtPath<UrinalSpriteHolder>(UrinalSpriteHolderPath);
+            if (holder != null)
+            {
+                return holder;
+            }
+
+            holder = ScriptableObject.CreateInstance<UrinalSpriteHolder>();
+            AssetDatabase.CreateAsset(holder, UrinalSpriteHolderPath);
+            return holder;
         }
 
         private static GameObject EnsureHighlight(Transform urinal, Transform body)
@@ -1360,7 +1383,42 @@ namespace Nyoice.Editor
 
             NyoicePixelArtSetup.EnsureNpcVisuals(npcRoot);
 
+            NPCBusinessSpriteHolder spriteHolder = EnsureBusinessSpriteHolder();
+            SpriteRenderer spriteRenderer = npcRoot.transform
+                .Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
+            npcController.ConfigureSpriteHolder(spriteHolder, spriteRenderer);
+            EditorUtility.SetDirty(npcController);
+
             EnsureUrinationGauge(npcRoot, npcController);
+        }
+
+        private static NPCBusinessSpriteHolder EnsureBusinessSpriteHolder()
+        {
+            EnsureAssetFolder("Assets/_Project/Art/Pixel/NPC");
+            EnsureAssetFolder(BusinessSpriteDirectory);
+
+            NPCBusinessSpriteHolder holder =
+                AssetDatabase.LoadAssetAtPath<NPCBusinessSpriteHolder>(BusinessSpriteHolderPath);
+            if (holder != null)
+            {
+                return holder;
+            }
+
+            holder = ScriptableObject.CreateInstance<NPCBusinessSpriteHolder>();
+            AssetDatabase.CreateAsset(holder, BusinessSpriteHolderPath);
+            return holder;
+        }
+
+        private static void EnsureAssetFolder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path))
+            {
+                return;
+            }
+
+            string parent = Path.GetDirectoryName(path)?.Replace('\\', '/');
+            string name = Path.GetFileName(path);
+            AssetDatabase.CreateFolder(parent, name);
         }
 
         private static void EnsureUrinationGauge(GameObject npcRoot, NPCController npcController)

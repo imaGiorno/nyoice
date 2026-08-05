@@ -11,6 +11,7 @@ namespace Nyoice.NPC
     {
         public const float DefaultMinimumUrinationDuration = 2f;
         public const float DefaultMaximumUrinationDuration = 10f;
+        public const float WalkFrameIntervalSeconds = 0.2f;
 
         [SerializeField]
         private bool enableStateLogs = true;
@@ -23,6 +24,12 @@ namespace Nyoice.NPC
 
         [SerializeField, Min(0.1f)]
         private float maximumUrinationDurationSeconds = DefaultMaximumUrinationDuration;
+
+        [SerializeField]
+        private NPCBusinessSpriteHolder spriteHolder;
+
+        [SerializeField]
+        private SpriteRenderer spriteRenderer;
 
         private NPCMovement _movement;
         private QueueManager _queueManager;
@@ -42,6 +49,9 @@ namespace Nyoice.NPC
         private bool _finished;
         private bool _destroyScheduled;
         private bool _hasAssignedUrinationDuration;
+        private float _walkFrameElapsed;
+        private bool _walkFrameAlternate;
+        private bool _isWalkSpriteAnimationActive;
 
         public QueueSlot CurrentSlot { get; private set; }
         public UrinalController TargetUrinal { get; private set; }
@@ -66,6 +76,7 @@ namespace Nyoice.NPC
         public bool IsMovingToExitPoint => _movingToExitPoint;
         public bool IsDestroyScheduled => _destroyScheduled;
         public bool IsGameOver => _gameStateManager != null && _gameStateManager.IsGameOver;
+        public NPCBusinessSpriteHolder SpriteHolder => spriteHolder;
         public bool CanAcceptUrinalSelection =>
             !IsGameOver && HasUrinalTicket && TargetUrinal == null &&
             (State == NPCState.Queue || State == NPCState.FrontWaiting);
@@ -77,11 +88,13 @@ namespace Nyoice.NPC
         {
             EnsureComponentReferences();
             AssignUrinationDurationOnce();
+            SetIdle();
         }
 
         private void Update()
         {
             AdvanceUrinationTime(Time.deltaTime);
+            AdvanceWalkSpriteTime(Time.deltaTime);
         }
 
         private void OnEnable()
@@ -96,6 +109,7 @@ namespace Nyoice.NPC
         {
             CancelSelectionWait();
             CancelUrinationTimer();
+            StopWalkSpriteAnimation();
             _movement?.Stop();
         }
 
@@ -113,6 +127,8 @@ namespace Nyoice.NPC
             EnsureComponentReferences();
             AssignUrinationDurationOnce();
             SetState(NPCState.Queue);
+            StopWalkSpriteAnimation();
+            SetIdle();
         }
 
         public void ConfigureUrinalFlow(
@@ -170,6 +186,78 @@ namespace Nyoice.NPC
             _scoreManager = scoreManager;
         }
 
+        public void ConfigureSpriteHolder(
+            NPCBusinessSpriteHolder holder,
+            SpriteRenderer targetRenderer)
+        {
+            spriteHolder = holder;
+            spriteRenderer = targetRenderer;
+            SetIdle();
+        }
+
+        public void SetIdle()
+        {
+            SetSprite(spriteHolder != null ? spriteHolder.NpcBusinessFront01 : null);
+        }
+
+        public void SetWalkFrame(bool alternate)
+        {
+            SetSprite(spriteHolder == null
+                ? null
+                : alternate
+                    ? spriteHolder.NpcBusinessLeft02
+                    : spriteHolder.NpcBusinessLeft01);
+        }
+
+        public void SetPee()
+        {
+            SetSprite(spriteHolder != null ? spriteHolder.NpcBusinessBackPee : null);
+        }
+
+        public void SetExit()
+        {
+            SetSprite(spriteHolder != null ? spriteHolder.NpcBusinessFront01 : null);
+        }
+
+        private void StartWalkSpriteAnimation()
+        {
+            _isWalkSpriteAnimationActive = true;
+            _walkFrameElapsed = 0f;
+            _walkFrameAlternate = false;
+            SetWalkFrame(false);
+        }
+
+        private void StopWalkSpriteAnimation()
+        {
+            _isWalkSpriteAnimationActive = false;
+            _walkFrameElapsed = 0f;
+            _walkFrameAlternate = false;
+        }
+
+        private void AdvanceWalkSpriteTime(float deltaTime)
+        {
+            if (!_isWalkSpriteAnimationActive || deltaTime <= 0f)
+            {
+                return;
+            }
+
+            _walkFrameElapsed += deltaTime;
+            while (_walkFrameElapsed >= WalkFrameIntervalSeconds)
+            {
+                _walkFrameElapsed -= WalkFrameIntervalSeconds;
+                _walkFrameAlternate = !_walkFrameAlternate;
+                SetWalkFrame(_walkFrameAlternate);
+            }
+        }
+
+        private void SetSprite(Sprite sprite)
+        {
+            if (spriteRenderer != null && sprite != null)
+            {
+                spriteRenderer.sprite = sprite;
+            }
+        }
+
         public void WaitInternally()
         {
             if (IsGameOver)
@@ -185,6 +273,8 @@ namespace Nyoice.NPC
             UrinationElapsed = 0f;
             RemainingUrinationTime = AssignedUrinationDuration;
             SetState(NPCState.Queue);
+            StopWalkSpriteAnimation();
+            SetIdle();
             SetPresentationVisible(false);
         }
 
@@ -199,6 +289,8 @@ namespace Nyoice.NPC
             CurrentSlot = slot;
             IsWaitingAtSlot = false;
             SetState(NPCState.Queue);
+            StopWalkSpriteAnimation();
+            SetIdle();
             _movement.MoveTo(slot.transform.position, HandleQueueSlotReached);
         }
 
@@ -212,6 +304,8 @@ namespace Nyoice.NPC
             CurrentSlot = null;
             IsWaitingAtSlot = false;
             SetState(NPCState.Queue);
+            StopWalkSpriteAnimation();
+            SetIdle();
             _movement.MoveTo(decisionPosition, HandleDecisionPointReached);
         }
 
@@ -656,7 +750,34 @@ namespace Nyoice.NPC
 
             NPCState previousState = State;
             State = nextState;
+            ApplySpritePresentation(nextState);
             Log($"{name} state: {previousState} -> {nextState}");
+        }
+
+        private void ApplySpritePresentation(NPCState state)
+        {
+            switch (state)
+            {
+                case NPCState.ApproachingLine:
+                case NPCState.CrossingLine:
+                case NPCState.WalkingToUrinal:
+                    StartWalkSpriteAnimation();
+                    break;
+                case NPCState.UsingUrinal:
+                case NPCState.ReadyToLeave:
+                    StopWalkSpriteAnimation();
+                    SetPee();
+                    break;
+                case NPCState.Leaving:
+                case NPCState.Finished:
+                    StopWalkSpriteAnimation();
+                    SetExit();
+                    break;
+                default:
+                    StopWalkSpriteAnimation();
+                    SetIdle();
+                    break;
+            }
         }
 
         private void Log(string message)
