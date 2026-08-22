@@ -17,6 +17,8 @@ namespace Nyoice.Editor
         private static readonly MethodInfo UsePointReachedMethod = GetNpcMethod("HandleUsePointReached");
         private static readonly MethodInfo QueueSlotReachedMethod = GetNpcMethod("HandleQueueSlotReached");
         private static readonly MethodInfo ApproachPointReachedMethod = GetNpcMethod("HandleApproachPointReached");
+        private static readonly MethodInfo CrossingTargetReachedMethod = GetNpcMethod("HandleCrossingTargetReached");
+        private static readonly MethodInfo WallClearanceReachedMethod = GetNpcMethod("HandleWallClearanceReached");
 
         [MenuItem("Nyoice/Validate Sprint5-4A Initial Flow")]
         public static void ValidateInitialFlow()
@@ -135,10 +137,25 @@ namespace Nyoice.Editor
                 Require(queueManager.SelectionZoneOccupant == secondNpc,
                     "The oldest remaining NPC did not receive selection after DecisionPoint passage.");
                 ApproachPointReachedMethod.Invoke(firstNpc, null);
+                Require(firstNpc.State == NPCState.CrossingLine &&
+                        movement.TargetPosition == crossingTarget.position &&
+                        queueManager.ApproachRouteOccupant == null &&
+                        queueManager.CrossingCorridorOccupant == firstNpc,
+                    "The NPC did not continue directly from ApproachPoint to CrossingTarget.");
+                CrossingTargetReachedMethod.Invoke(firstNpc, null);
+                Vector3 wallClearanceTarget = selectedUrinal.UrinalNumber >= 7
+                    ? new Vector3(selectedUrinal.MovePoint.position.x, crossingTarget.position.y,
+                        selectedUrinal.MovePoint.position.z)
+                    : selectedUrinal.MovePoint.position;
                 Require(firstNpc.State == NPCState.WalkingToUrinal &&
-                        movement.TargetPosition == selectedUrinal.MovePoint.position &&
-                        queueManager.ApproachRouteOccupant == null,
-                    "The NPC did not follow ApproachPoint before its urinal MovePoint.");
+                        movement.TargetPosition == wallClearanceTarget,
+                    "The NPC did not follow its hybrid urinal route.");
+                if (selectedUrinal.UrinalNumber >= 7)
+                {
+                    WallClearanceReachedMethod.Invoke(firstNpc, null);
+                }
+                Require(movement.TargetPosition == selectedUrinal.MovePoint.position,
+                    "The NPC did not continue from wall clearance to MovePoint.");
 
                 MovePointReachedMethod.Invoke(firstNpc, null);
                 Require(movement.TargetPosition == selectedUrinal.UsePoint.position,

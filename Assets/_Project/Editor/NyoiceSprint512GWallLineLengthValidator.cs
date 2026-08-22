@@ -13,18 +13,7 @@ namespace Nyoice.Editor
         [MenuItem("Nyoice/Validate Sprint5-12G Wall Line Length Fix")]
         public static void ValidateWallLineLengthFix()
         {
-            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(GameScenePath) == null)
-            {
-                NyoiceProjectSetup.SetupSprintOne();
-            }
-
-            NyoiceGameStageSetup.SetupGameStage();
-            StageSnapshot snapshot = new StageSnapshot();
-            NyoiceGameStageSetup.SetupGameStage();
-
-            ValidateWallVisual(snapshot);
-            snapshot.ValidateUnchanged();
-            NyoiceSprint512FUiWidthVisualRestoreValidator.ValidateUiWidthVisualRestore();
+            NyoiceSprint512KWallRouteConsistencyValidator.ValidateWallRouteConsistencyFix();
             Debug.Log("Sprint5-12G Wall Line Length Fix validation passed.");
         }
 
@@ -32,32 +21,37 @@ namespace Nyoice.Editor
         {
             Transform lineRoot = GameObject.Find("GameStage/NyoiceLine")?.transform;
             Require(lineRoot != null, "NyoiceLine root is missing.");
-            Transform wallVisual = null;
+            Transform wallRoot = null;
             int count = 0;
             for (int index = 0; index < lineRoot.childCount; index++)
             {
-                if (lineRoot.GetChild(index).name != "WallVisual") continue;
-                wallVisual = lineRoot.GetChild(index);
+                if (lineRoot.GetChild(index).name != "WallVisualRoot") continue;
+                wallRoot = lineRoot.GetChild(index);
                 count++;
             }
 
-            Require(count == 1 && wallVisual != null, "Exactly one red WallVisual must exist.");
-            MeshRenderer renderer = wallVisual.GetComponent<MeshRenderer>();
-            Require(renderer != null && renderer.enabled, "WallVisual Renderer is missing or disabled.");
-            Require(wallVisual.GetComponent<Collider>() == null, "WallVisual must not add a Collider.");
+            Require(count == 1 && wallRoot != null, "Exactly one WallVisualRoot must exist.");
+            Transform upper = wallRoot.Find("WallUpper");
+            Transform lower = wallRoot.Find("WallLower");
+            Require(upper != null && lower != null, "WallVisual opening segments are missing.");
+            Require(upper.GetComponent<MeshRenderer>()?.enabled == true &&
+                    lower.GetComponent<MeshRenderer>()?.enabled == true,
+                "WallVisual segment Renderer is missing or disabled.");
+            Require(upper.GetComponent<Collider>() == null && lower.GetComponent<Collider>() == null,
+                "WallVisual segments must not add Colliders.");
 
             Transform crossing = lineRoot.Find("CrossingTarget");
             Require(crossing != null && Mathf.Approximately(crossing.position.y, ExpectedTurnY),
                 "CrossingTarget position changed.");
-            float lowerEnd = wallVisual.position.y - (Mathf.Abs(wallVisual.lossyScale.y) * 0.5f);
-            float gap = lowerEnd - crossing.position.y;
-            Require(lowerEnd >= crossing.position.y - 0.001f,
-                "WallVisual extends below the NPC turning point.");
-            Require(gap <= 2.2f,
-                $"WallVisual leaves an excessive {gap:0.000}-unit clearance above the turning point.");
-            Require(snapshot.WallVisualPosition == wallVisual.position && snapshot.WallVisualScale == wallVisual.localScale,
-                "WallVisual position or length accumulated after repeated Setup.");
-            Debug.Log($"Sprint5-12G WallVisual center={wallVisual.position}, length={wallVisual.lossyScale.y:0.000}, lowerEnd={lowerEnd:0.000}.");
+            float upperTop = upper.position.y + (Mathf.Abs(upper.lossyScale.y) * 0.5f);
+            float lowerBottom = lower.position.y - (Mathf.Abs(lower.lossyScale.y) * 0.5f);
+            Require(Mathf.Approximately(upperTop, 3.25f) && Mathf.Approximately(lowerBottom, -4.75f),
+                "WallVisual no longer spans the original wall endpoints.");
+            Require(snapshot.WallUpperPosition == upper.position && snapshot.WallUpperScale == upper.localScale &&
+                    snapshot.WallLowerPosition == lower.position && snapshot.WallLowerScale == lower.localScale,
+                "WallVisual opening accumulated after repeated Setup.");
+            Debug.Log($"Sprint5-12G WallUpper={upper.position}/{upper.lossyScale.y:0.000}, " +
+                      $"WallLower={lower.position}/{lower.lossyScale.y:0.000}.");
         }
 
         private static void Require(bool condition, string message)
@@ -99,13 +93,18 @@ namespace Nyoice.Editor
                 _colliderCenter = collider.center;
                 _colliderSize = collider.size;
                 _colliderTrigger = collider.isTrigger;
-                Transform visual = RequiredTransform("GameStage/NyoiceLine/WallVisual");
-                WallVisualPosition = visual.position;
-                WallVisualScale = visual.localScale;
+                Transform upper = RequiredTransform("GameStage/NyoiceLine/WallVisualRoot/WallUpper");
+                Transform lower = RequiredTransform("GameStage/NyoiceLine/WallVisualRoot/WallLower");
+                WallUpperPosition = upper.position;
+                WallUpperScale = upper.localScale;
+                WallLowerPosition = lower.position;
+                WallLowerScale = lower.localScale;
             }
 
-            public Vector3 WallVisualPosition { get; }
-            public Vector3 WallVisualScale { get; }
+            public Vector3 WallUpperPosition { get; }
+            public Vector3 WallUpperScale { get; }
+            public Vector3 WallLowerPosition { get; }
+            public Vector3 WallLowerScale { get; }
 
             public void ValidateUnchanged()
             {

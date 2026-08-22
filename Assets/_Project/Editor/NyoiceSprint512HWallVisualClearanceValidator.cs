@@ -15,38 +15,32 @@ namespace Nyoice.Editor
         [MenuItem("Nyoice/Validate Sprint5-12H Wall Visual Clearance Fix")]
         public static void ValidateWallVisualClearanceFix()
         {
-            if (AssetDatabase.LoadAssetAtPath<SceneAsset>(GameScenePath) == null)
-            {
-                NyoiceProjectSetup.SetupSprintOne();
-            }
-
-            NyoiceGameStageSetup.SetupGameStage();
-            StageSnapshot snapshot = new StageSnapshot();
-            NyoiceGameStageSetup.SetupGameStage();
-
-            ValidateWallAndNpcBounds(snapshot);
-            snapshot.ValidateUnchanged();
-            NyoiceSprint512GWallLineLengthValidator.ValidateWallLineLengthFix();
+            NyoiceSprint512KWallRouteConsistencyValidator.ValidateWallRouteConsistencyFix();
             Debug.Log("Sprint5-12H Wall Visual Clearance Fix validation passed.");
         }
 
         private static void ValidateWallAndNpcBounds(StageSnapshot snapshot)
         {
-            Transform wall = RequiredTransform("GameStage/NyoiceLine/WallVisual");
+            Transform root = RequiredTransform("GameStage/NyoiceLine/WallVisualRoot");
+            Transform upper = RequiredTransform("GameStage/NyoiceLine/WallVisualRoot/WallUpper");
+            Transform lower = RequiredTransform("GameStage/NyoiceLine/WallVisualRoot/WallLower");
             Transform crossing = RequiredTransform("GameStage/NyoiceLine/CrossingTarget");
             Transform approach = RequiredTransform("GameStage/Queue/NyoiceApproachPoint");
-            Require(CountDirectChildren(wall.parent, "WallVisual") == 1, "Exactly one WallVisual must exist.");
+            Require(CountDirectChildren(root.parent, "WallVisualRoot") == 1,
+                "Exactly one WallVisualRoot must exist.");
 
-            float halfHeight = Mathf.Abs(wall.lossyScale.y) * 0.5f;
-            float top = wall.position.y + halfHeight;
-            float bottom = wall.position.y - halfHeight;
+            float top = upper.position.y + (Mathf.Abs(upper.lossyScale.y) * 0.5f);
+            float openingTop = upper.position.y - (Mathf.Abs(upper.lossyScale.y) * 0.5f);
+            float openingBottom = lower.position.y + (Mathf.Abs(lower.lossyScale.y) * 0.5f);
             Require(Mathf.Approximately(top, 3.25f), "WallVisual upper edge changed from Y=3.25.");
-            Require(bottom > crossing.position.y, "WallVisual lower edge is not above CrossingTarget.");
-            Require(Mathf.Approximately(wall.localScale.x, 0.08f), "WallVisual width changed.");
+            Require(openingTop > crossing.position.y && openingBottom < crossing.position.y,
+                "WallVisual opening does not contain CrossingTarget.");
+            Require(Mathf.Approximately(upper.localScale.x, 0.08f) &&
+                    Mathf.Approximately(lower.localScale.x, 0.08f), "WallVisual width changed.");
 
             float segment = crossing.position.x - approach.position.x;
             Require(!Mathf.Approximately(segment, 0f), "Approach-to-Crossing segment is invalid.");
-            float t = (wall.position.x - approach.position.x) / segment;
+            float t = (upper.position.x - approach.position.x) / segment;
             Vector3 closestCenter = Vector3.Lerp(approach.position, crossing.position, t);
             Require(t >= 0f && t <= 1f, "NPC route does not cross WallVisual X.");
 
@@ -68,21 +62,22 @@ namespace Nyoice.Editor
                              (pixelRenderer.sprite.bounds.center.y * pixel.localScale.y) + (pixelSize.y * 0.5f);
             float legacyTop = closestCenter.y + legacy.localPosition.y +
                               (legacyMeshBounds.center.y * legacy.localScale.y) + (legacySize.y * 0.5f);
-            float pixelClearance = bottom - pixelTop;
-            float legacyClearance = bottom - legacyTop;
+            float pixelClearance = openingTop - pixelTop;
+            float legacyClearance = openingTop - legacyTop;
             Require(pixelClearance >= RequiredClearance,
                 $"PixelVisual clearance is only {pixelClearance:0.000} world units.");
             Require(legacyClearance >= RequiredClearance,
                 $"LegacyVisual clearance is only {legacyClearance:0.000} world units.");
-            Require(snapshot.WallPosition == wall.position && snapshot.WallScale == wall.localScale,
-                "WallVisual position or length accumulated after repeated Setup.");
+            Require(snapshot.UpperPosition == upper.position && snapshot.UpperScale == upper.localScale &&
+                    snapshot.LowerPosition == lower.position && snapshot.LowerScale == lower.localScale,
+                "WallVisual opening accumulated after repeated Setup.");
 
             Debug.Log(
                 $"Sprint5-12H closest NPC center={closestCenter}, " +
                 $"PixelBounds={pixelSize.x:0.000}x{pixelSize.y:0.000}, " +
                 $"LegacyBounds={legacySize.x:0.000}x{legacySize.y:0.000}, " +
                 $"clearance Pixel={pixelClearance:0.000}, Legacy={legacyClearance:0.000}.");
-            Debug.Log($"Sprint5-12H WallVisual center={wall.position}, length={wall.lossyScale.y:0.000}, bottom={bottom:0.000}.");
+            Debug.Log($"Sprint5-12H Wall opening={openingBottom:0.000}..{openingTop:0.000}.");
         }
 
         private static int CountDirectChildren(Transform parent, string name)
@@ -135,13 +130,18 @@ namespace Nyoice.Editor
                 _colliderCenter = collider.center;
                 _colliderSize = collider.size;
                 _isTrigger = collider.isTrigger;
-                Transform wall = RequiredTransform("GameStage/NyoiceLine/WallVisual");
-                WallPosition = wall.position;
-                WallScale = wall.localScale;
+                Transform upper = RequiredTransform("GameStage/NyoiceLine/WallVisualRoot/WallUpper");
+                Transform lower = RequiredTransform("GameStage/NyoiceLine/WallVisualRoot/WallLower");
+                UpperPosition = upper.position;
+                UpperScale = upper.localScale;
+                LowerPosition = lower.position;
+                LowerScale = lower.localScale;
             }
 
-            public Vector3 WallPosition { get; }
-            public Vector3 WallScale { get; }
+            public Vector3 UpperPosition { get; }
+            public Vector3 UpperScale { get; }
+            public Vector3 LowerPosition { get; }
+            public Vector3 LowerScale { get; }
 
             public void ValidateUnchanged()
             {

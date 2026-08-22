@@ -38,8 +38,9 @@ namespace Nyoice.Editor
         private const float DecisionPointX = 6.5f;
         private const float NyoiceApproachX = 6.2f;
         private const float NyoiceLineX = 6f;
-        private const float CrossingTargetX = 5.8f;
+        private const float CrossingTargetX = 4.8f;
         private const float WallVisualBottomY = -0.4f;
+        private const float WallRouteTurnY = -2.7f;
         private const float SpawnPointY = 4.5f;
         private const float NpcMovementSpeed = 4f;
 
@@ -274,7 +275,7 @@ namespace Nyoice.Editor
             CreatePoint(
                 "NyoiceApproachPoint",
                 parent,
-                new Vector3(NyoiceApproachX, QueueStartY, 0f),
+                new Vector3(NyoiceApproachX, WallRouteTurnY, 0f),
                 new Color(1f, 0.35f, 0.15f));
 
             for (int index = 0; index < UrinalCount; index++)
@@ -302,7 +303,7 @@ namespace Nyoice.Editor
             CreatePoint(
                 "CrossingTarget",
                 parent,
-                new Vector3(CrossingTargetX, QueueStartY, 0f),
+                new Vector3(CrossingTargetX, WallRouteTurnY, 0f),
                 new Color(0.95f, 0.5f, 0.15f));
         }
 
@@ -360,7 +361,7 @@ namespace Nyoice.Editor
             SetOrCreatePoint(
                 queueRoot,
                 "NyoiceApproachPoint",
-                new Vector3(NyoiceApproachX, QueueStartY, 0f),
+                new Vector3(NyoiceApproachX, WallRouteTurnY, 0f),
                 new Color(1f, 0.35f, 0.15f));
 
             for (int index = 0; index < UrinalCount; index++)
@@ -419,7 +420,7 @@ namespace Nyoice.Editor
             return SetOrCreatePoint(
                 lineRoot,
                 "CrossingTarget",
-                new Vector3(CrossingTargetX, QueueStartY, 0f),
+                new Vector3(CrossingTargetX, WallRouteTurnY, 0f),
                 new Color(0.95f, 0.5f, 0.15f));
         }
 
@@ -546,6 +547,11 @@ namespace Nyoice.Editor
                 SpriteRenderer spriteRenderer = urinal
                     .Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
                 controller.ConfigureSpriteHolder(spriteHolder, spriteRenderer);
+                ConfigureUrinalHighlightLayout(
+                    urinal,
+                    body,
+                    highlight.transform,
+                    NyoicePixelArtSetup.UsePixelVisuals);
                 EditorUtility.SetDirty(controller);
                 controllers[index] = controller;
             }
@@ -599,7 +605,7 @@ namespace Nyoice.Editor
             float outerHeight = body.localScale.y + 0.3f;
 
             SpriteRenderer pixelRenderer = urinal.Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
-            if (usePixelVisual && pixelRenderer != null && pixelRenderer.sprite != null)
+            if (pixelRenderer != null && pixelRenderer.sprite != null)
             {
                 const float pixelHighlightYOffset = -0.065f;
                 Vector2 spriteSize = pixelRenderer.sprite.bounds.size;
@@ -1571,7 +1577,7 @@ namespace Nyoice.Editor
             SetRenderersEnabled(gameStage.Find("Entrance/SpawnPoint"), false);
             SetRenderersEnabled(gameStage.Find("Queue"), false);
             SetRenderersEnabled(gameStage.Find("NyoiceLine/Line"), false);
-            SetRenderersEnabled(gameStage.Find("NyoiceLine/WallVisual"), true);
+            SetRenderersEnabled(gameStage.Find("NyoiceLine/WallVisualRoot"), true);
             SetRenderersEnabled(gameStage.Find("NyoiceLine/CrossingTarget"), false);
             SetRenderersEnabled(gameStage.Find("Exit/ExitMarker"), true);
             SetRenderersEnabled(gameStage.Find("Exit/ExitPoint"), false);
@@ -1581,32 +1587,71 @@ namespace Nyoice.Editor
 
         private static void EnsureNyoiceLineWallVisual(Transform lineRoot, Transform runtimeLine)
         {
-            Transform visual = lineRoot.Find("WallVisual");
-            if (visual == null)
+            Transform legacyVisual = lineRoot.Find("WallVisual");
+            if (legacyVisual != null)
             {
-                var visualObject = new GameObject("WallVisual", typeof(MeshFilter), typeof(MeshRenderer));
-                visual = visualObject.transform;
-                visual.SetParent(lineRoot, false);
+                Object.DestroyImmediate(legacyVisual.gameObject);
             }
 
             MeshFilter sourceFilter = runtimeLine.GetComponent<MeshFilter>();
             MeshRenderer sourceRenderer = runtimeLine.GetComponent<MeshRenderer>();
-            MeshFilter visualFilter = visual.GetComponent<MeshFilter>();
-            MeshRenderer visualRenderer = visual.GetComponent<MeshRenderer>();
-            visualFilter.sharedMesh = sourceFilter.sharedMesh;
-            visualRenderer.sharedMaterial = sourceRenderer.sharedMaterial;
-            visualRenderer.sortingOrder = sourceRenderer.sortingOrder;
+            Transform visualRoot = lineRoot.Find("WallVisualRoot");
+            if (visualRoot == null)
+            {
+                visualRoot = new GameObject("WallVisualRoot").transform;
+                visualRoot.SetParent(lineRoot, false);
+            }
 
-            float wallHeight = UrinalY - WallVisualBottomY;
-            float wallCenterY = WallVisualBottomY + (wallHeight * 0.5f);
-            visual.position = new Vector3(NyoiceLineX, wallCenterY, 0f);
-            visual.rotation = Quaternion.identity;
-            visual.localScale = new Vector3(0.08f, wallHeight, 0.08f);
+            visualRoot.localPosition = Vector3.zero;
+            visualRoot.localRotation = Quaternion.identity;
+            visualRoot.localScale = Vector3.one;
+            EnsureWallVisualSegment(visualRoot, "Wall", WallVisualBottomY, UrinalY,
+                sourceFilter, sourceRenderer);
+            RemoveDirectChild(visualRoot, "WallUpper");
+            RemoveDirectChild(visualRoot, "WallLower");
+
             sourceRenderer.enabled = false;
-            visualRenderer.enabled = true;
             EditorUtility.SetDirty(sourceRenderer);
-            EditorUtility.SetDirty(visualRenderer);
-            EditorUtility.SetDirty(visual);
+            EditorUtility.SetDirty(visualRoot);
+        }
+
+        private static void EnsureWallVisualSegment(
+            Transform root,
+            string segmentName,
+            float bottom,
+            float top,
+            MeshFilter sourceFilter,
+            MeshRenderer sourceRenderer)
+        {
+            Transform segment = root.Find(segmentName);
+            if (segment == null)
+            {
+                segment = new GameObject(segmentName, typeof(MeshFilter), typeof(MeshRenderer)).transform;
+                segment.SetParent(root, false);
+            }
+
+            MeshFilter filter = segment.GetComponent<MeshFilter>();
+            MeshRenderer renderer = segment.GetComponent<MeshRenderer>();
+            filter.sharedMesh = sourceFilter.sharedMesh;
+            renderer.sharedMaterial = sourceRenderer.sharedMaterial;
+            renderer.sortingOrder = sourceRenderer.sortingOrder;
+            renderer.enabled = true;
+
+            float height = top - bottom;
+            segment.position = new Vector3(NyoiceLineX, bottom + (height * 0.5f), 0f);
+            segment.rotation = Quaternion.identity;
+            segment.localScale = new Vector3(0.08f, height, 0.08f);
+            EditorUtility.SetDirty(renderer);
+            EditorUtility.SetDirty(segment);
+        }
+
+        private static void RemoveDirectChild(Transform parent, string childName)
+        {
+            Transform child = parent.Find(childName);
+            if (child != null)
+            {
+                Object.DestroyImmediate(child.gameObject);
+            }
         }
 
         private static void SetRenderersEnabled(Transform root, bool enabled)

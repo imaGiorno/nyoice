@@ -138,7 +138,7 @@ namespace Nyoice.Editor
 
             RequireRendererState(stage, "Entrance/EntranceMarker", true);
             RequireRendererState(stage, "Exit/ExitMarker", true);
-            RequireRendererState(stage, "NyoiceLine/WallVisual", true);
+            RequireRendererState(stage, "NyoiceLine/WallVisualRoot", true);
             Renderer runtimeLineRenderer = stage.Find("NyoiceLine/Line")?.GetComponent<Renderer>();
             Require(runtimeLineRenderer != null && !runtimeLineRenderer.enabled,
                 "Runtime line Renderer must remain hidden behind WallVisual.");

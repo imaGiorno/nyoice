@@ -9,6 +9,7 @@ namespace Nyoice.NPC
     [RequireComponent(typeof(NPCMovement))]
     public sealed class NPCController : MonoBehaviour
     {
+        private const int FirstWallBottomHorizontalUrinalNumber = 7;
         public const float DefaultMinimumUrinationDuration = 2f;
         public const float DefaultMaximumUrinationDuration = 10f;
         public const float WalkFrameIntervalSeconds = 0.2f;
@@ -76,6 +77,9 @@ namespace Nyoice.NPC
         public bool IsMovingToExitPoint => _movingToExitPoint;
         public bool IsDestroyScheduled => _destroyScheduled;
         public bool IsGameOver => _gameStateManager != null && _gameStateManager.IsGameOver;
+        public bool UsesWallBottomHorizontalRoute =>
+            TargetUrinal != null &&
+            TargetUrinal.UrinalNumber >= FirstWallBottomHorizontalUrinalNumber;
         public NPCBusinessSpriteHolder SpriteHolder => spriteHolder;
         public bool CanAcceptUrinalSelection =>
             !IsGameOver && HasUrinalTicket && TargetUrinal == null &&
@@ -95,6 +99,10 @@ namespace Nyoice.NPC
         {
             AdvanceUrinationTime(Time.deltaTime);
             AdvanceWalkSpriteTime(Time.deltaTime);
+            if (State == NPCState.CrossingLine || State == NPCState.WalkingToUrinal)
+            {
+                _queueManager?.NotifyCrossingCorridorProgress(this);
+            }
         }
 
         private void OnEnable()
@@ -395,6 +403,7 @@ namespace Nyoice.NPC
             if (TargetUrinal == null || TargetUrinal.ReservedBy != this)
             {
                 _movement.Stop();
+                _queueManager?.ReleaseCrossingCorridor(this);
                 ReleaseUrinalTicket();
                 SetState(NPCState.FrontWaiting);
                 Debug.LogWarning($"{name} stopped because no urinal is available.", this);
@@ -402,8 +411,16 @@ namespace Nyoice.NPC
             }
 
             SetState(NPCState.WalkingToUrinal);
-            Log($"{name} moving to Urinal{TargetUrinal.UrinalNumber:00} MovePoint");
-            _movement.MoveTo(TargetUrinal.MovePoint.position, HandleMovePointReached);
+            Vector3 postCrossingTarget = GetPostCrossingTarget();
+            if (!UsesWallBottomHorizontalRoute)
+            {
+                Log($"{name} moving directly to Urinal{TargetUrinal.UrinalNumber:00} MovePoint");
+                _movement.MoveTo(postCrossingTarget, HandleMovePointReached);
+                return;
+            }
+
+            Log($"{name} moving left below the wall toward Urinal{TargetUrinal.UrinalNumber:00}");
+            _movement.MoveTo(postCrossingTarget, HandleWallClearanceReached);
         }
 
         public bool ReleaseUrinalTicket()
@@ -445,10 +462,17 @@ namespace Nyoice.NPC
 
             if (TargetUrinal != null && TargetUrinal.ReservedBy == this)
             {
-                _queueManager?.NotifyApproachPointReached(this);
-                SetState(NPCState.WalkingToUrinal);
-                Log($"{name} reached ApproachPoint and is moving to Urinal{TargetUrinal.UrinalNumber:00} MovePoint");
-                _movement.MoveTo(TargetUrinal.MovePoint.position, HandleMovePointReached);
+                if (_queueManager != null)
+                {
+                    if (!_queueManager.NotifyApproachPointReached(this))
+                    {
+                        BeginCrossingCorridor();
+                    }
+                }
+                else
+                {
+                    BeginCrossingCorridor();
+                }
                 return;
             }
 
@@ -480,14 +504,60 @@ namespace Nyoice.NPC
                 return;
             }
 
-            SetState(NPCState.CrossingLine);
             Log($"{name} selection wait completed");
+            if (_queueManager != null)
+            {
+                if (!_queueManager.NotifyApproachPointReached(this))
+                {
+                    BeginCrossingCorridor();
+                }
+            }
+            else
+            {
+                BeginCrossingCorridor();
+            }
+        }
+
+        public void BeginCrossingCorridor()
+        {
+            if (IsGameOver || (State != NPCState.ApproachingLine && State != NPCState.SelectingUrinal))
+            {
+                return;
+            }
+
+            CancelSelectionWait();
+            SetState(NPCState.CrossingLine);
             _movement.MoveTo(_lineCrossingTarget, HandleCrossingTargetReached);
         }
 
         private void HandleCrossingTargetReached()
         {
             HandleNyoiceLineCrossed();
+        }
+
+        private void HandleWallClearanceReached()
+        {
+            if (IsGameOver || State != NPCState.WalkingToUrinal || TargetUrinal == null)
+            {
+                return;
+            }
+
+            _movement.MoveTo(TargetUrinal.MovePoint.position, HandleMovePointReached);
+        }
+
+        private Vector3 GetPostCrossingTarget()
+        {
+            if (TargetUrinal == null || TargetUrinal.MovePoint == null)
+            {
+                return transform.position;
+            }
+
+            return UsesWallBottomHorizontalRoute
+                ? new Vector3(
+                    TargetUrinal.MovePoint.position.x,
+                    _lineCrossingTarget.y,
+                    TargetUrinal.MovePoint.position.z)
+                : TargetUrinal.MovePoint.position;
         }
 
         private void HandleMovePointReached()

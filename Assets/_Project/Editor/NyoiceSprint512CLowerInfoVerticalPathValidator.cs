@@ -14,6 +14,7 @@ namespace Nyoice.Editor
         private const float ExpectedLowerInfoWidth = 1220f;
         private const float ExpectedQueueX = 7f;
         private const float ExpectedQueueBottomY = -2.5f;
+        private const float ExpectedWallRouteTurnY = -2.7f;
         private const float ExpectedQueueSpacing = 0.9f;
         private static readonly Vector3 ExpectedSpawnPosition = new Vector3(7f, 4.5f, 0f);
 
@@ -100,11 +101,11 @@ namespace Nyoice.Editor
             }
 
             Require(Mathf.Approximately(queue.Find("DecisionPoint").position.y, ExpectedQueueBottomY) &&
-                    Mathf.Approximately(queue.Find("NyoiceApproachPoint").position.y, ExpectedQueueBottomY),
-                "Decision or approach path was not raised consistently.");
+                    Mathf.Approximately(queue.Find("NyoiceApproachPoint").position.y, ExpectedWallRouteTurnY),
+                "Decision or wall approach path changed.");
             Require(Mathf.Approximately(stage.Find("NyoiceLine/CrossingTarget").position.y,
-                    ExpectedQueueBottomY),
-                "CrossingTarget was not raised consistently.");
+                    ExpectedWallRouteTurnY),
+                "CrossingTarget wall turn Y changed.");
             Require(Mathf.Approximately(stage.Find("Exit/ExitPoint").position.y, ExpectedQueueBottomY),
                 "ExitPoint was not raised consistently.");
         }
