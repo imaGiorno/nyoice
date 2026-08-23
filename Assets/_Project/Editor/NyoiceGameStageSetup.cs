@@ -1,4 +1,5 @@
 using System.IO;
+using Nyoice.Audio;
 using Nyoice.Core;
 using Nyoice.Managers;
 using Nyoice.NPC;
@@ -17,20 +18,29 @@ namespace Nyoice.Editor
         private const string MenuPath = "Nyoice/Setup Game Stage";
         private const string GameScenePath = "Assets/_Project/Scenes/GameScene.unity";
         private const string NpcPrefabPath = "Assets/_Project/Prefabs/NPC.prefab";
+        private const string BusinessSpriteDirectory = "Assets/_Project/Art/Pixel/NPC/Business";
+        private const string BusinessSpriteHolderPath =
+            BusinessSpriteDirectory + "/NPCBusinessSpriteHolder.asset";
+        private const string UrinalSpriteHolderPath =
+            "Assets/_Project/Art/Pixel/Urinals/UrinalSpriteHolder.asset";
         private const string MaterialsDirectory = "Assets/_Project/Materials";
+        private const string AudioDirectory = "Assets/_Project/Audio";
+        private const string AudioClipHolderPath = AudioDirectory + "/AudioClipHolder.asset";
         private const int UrinalCount = 8;
 
-        private const float UrinalStartX = -5.25f;
+        private const float UrinalStartX = -6f;
         private const float UrinalSpacing = 1.5f;
         private const float UrinalY = 3.25f;
         private const float StageBottomY = -4.75f;
         private const float QueueLaneX = 7f;
-        private const float QueueStartY = -3.75f;
-        private const float QueueSpacingY = 1f;
+        private const float QueueStartY = -2.5f;
+        private const float QueueSpacingY = 0.9f;
         private const float DecisionPointX = 6.5f;
         private const float NyoiceApproachX = 6.2f;
         private const float NyoiceLineX = 6f;
-        private const float CrossingTargetX = 5.8f;
+        private const float CrossingTargetX = 4.8f;
+        private const float WallVisualBottomY = -0.4f;
+        private const float WallRouteTurnY = -2.7f;
         private const float SpawnPointY = 4.5f;
         private const float NpcMovementSpeed = 4f;
 
@@ -89,7 +99,6 @@ namespace Nyoice.Editor
         {
             var gameStage = new GameObject("GameStage");
             Transform urinals = CreateGroup("Urinals", gameStage.transform);
-            Transform partitions = CreateGroup("Partitions", gameStage.transform);
             Transform entrance = CreateGroup("Entrance", gameStage.transform);
             Transform queue = CreateGroup("Queue", gameStage.transform);
             Transform nyoiceLine = CreateGroup("NyoiceLine", gameStage.transform);
@@ -97,7 +106,6 @@ namespace Nyoice.Editor
             Transform waypoints = CreateGroup("Waypoints", gameStage.transform);
 
             CreateUrinals(urinals);
-            CreatePartitions(partitions);
             CreateEntrance(entrance);
             CreateQueue(queue);
             CreateNyoiceLine(nyoiceLine);
@@ -117,6 +125,7 @@ namespace Nyoice.Editor
             Transform waypointRoot = GetOrCreateGroup("Waypoints", gameStage);
 
             EnsureQueueLayout(queueRoot);
+            RemoveBackgroundProps(gameStage);
             Transform spawnPoint = EnsureEntranceLayout(entranceRoot);
             Transform crossingTarget = EnsureNyoiceLine(lineRoot);
             Transform exitPoint = EnsureExitLayout(exitRoot);
@@ -124,6 +133,8 @@ namespace Nyoice.Editor
             QueueSlot[] queueSlots = EnsureQueueSlots(queueRoot);
             Transform decisionPoint = queueRoot.Find("DecisionPoint");
             Transform approachPoint = queueRoot.Find("NyoiceApproachPoint");
+
+            EnsureStageVisualVisibility(gameStage);
 
             EnsureGameSystems(
                 queueSlots,
@@ -192,17 +203,12 @@ namespace Nyoice.Editor
             EditorUtility.SetDirty(text);
         }
 
-        private static void CreatePartitions(Transform parent)
+        private static void RemoveBackgroundProps(Transform gameStage)
         {
-            for (int index = 0; index < UrinalCount; index++)
+            Transform props = gameStage.Find("BackgroundProps");
+            if (props != null)
             {
-                float x = GetUrinalX(index) + (UrinalSpacing * 0.5f);
-                CreateCube(
-                    $"Partition{index + 1:00}",
-                    parent,
-                    new Vector3(x, UrinalY, 0f),
-                    new Vector3(0.12f, 1.8f, 0.8f),
-                    new Color(0.35f, 0.42f, 0.48f));
+                Object.DestroyImmediate(props.gameObject);
             }
         }
 
@@ -227,7 +233,7 @@ namespace Nyoice.Editor
             CreatePoint(
                 "NyoiceApproachPoint",
                 parent,
-                new Vector3(NyoiceApproachX, QueueStartY, 0f),
+                new Vector3(NyoiceApproachX, WallRouteTurnY, 0f),
                 new Color(1f, 0.35f, 0.15f));
 
             for (int index = 0; index < UrinalCount; index++)
@@ -255,7 +261,7 @@ namespace Nyoice.Editor
             CreatePoint(
                 "CrossingTarget",
                 parent,
-                new Vector3(CrossingTargetX, QueueStartY, 0f),
+                new Vector3(CrossingTargetX, WallRouteTurnY, 0f),
                 new Color(0.95f, 0.5f, 0.15f));
         }
 
@@ -264,10 +270,10 @@ namespace Nyoice.Editor
             CreateCube(
                 "ExitMarker",
                 parent,
-                new Vector3(-6.5f, -3.75f, 0f),
+                new Vector3(-6.5f, QueueStartY, 0f),
                 new Vector3(0.25f, 2f, 0.25f),
                 new Color(0.3f, 0.55f, 0.9f));
-            CreatePoint("ExitPoint", parent, new Vector3(-5.75f, -3.75f, 0f), Color.cyan);
+            CreatePoint("ExitPoint", parent, new Vector3(-5.75f, QueueStartY, 0f), Color.cyan);
         }
 
         private static Transform EnsureExitLayout(Transform parent)
@@ -278,16 +284,16 @@ namespace Nyoice.Editor
                 exitMarker = CreateCube(
                     "ExitMarker",
                     parent,
-                    new Vector3(-6.5f, -3.75f, 0f),
+                    new Vector3(-6.5f, QueueStartY, 0f),
                     new Vector3(0.25f, 2f, 0.25f),
                     new Color(0.3f, 0.55f, 0.9f)).transform;
             }
 
-            exitMarker.position = new Vector3(-6.5f, -3.75f, 0f);
+            exitMarker.position = new Vector3(-6.5f, QueueStartY, 0f);
             return SetOrCreatePoint(
                 parent,
                 "ExitPoint",
-                new Vector3(-5.75f, -3.75f, 0f),
+                new Vector3(-5.75f, QueueStartY, 0f),
                 Color.cyan);
         }
 
@@ -313,7 +319,7 @@ namespace Nyoice.Editor
             SetOrCreatePoint(
                 queueRoot,
                 "NyoiceApproachPoint",
-                new Vector3(NyoiceApproachX, QueueStartY, 0f),
+                new Vector3(NyoiceApproachX, WallRouteTurnY, 0f),
                 new Color(1f, 0.35f, 0.15f));
 
             for (int index = 0; index < UrinalCount; index++)
@@ -367,10 +373,12 @@ namespace Nyoice.Editor
                 lineTransform.gameObject.AddComponent<NyoiceLine>();
             }
 
+            EnsureNyoiceLineWallVisual(lineRoot, lineTransform);
+
             return SetOrCreatePoint(
                 lineRoot,
                 "CrossingTarget",
-                new Vector3(CrossingTargetX, QueueStartY, 0f),
+                new Vector3(CrossingTargetX, WallRouteTurnY, 0f),
                 new Color(0.95f, 0.5f, 0.15f));
         }
 
@@ -399,6 +407,7 @@ namespace Nyoice.Editor
             Transform waypointRoot)
         {
             var controllers = new UrinalController[UrinalCount];
+            UrinalSpriteHolder spriteHolder = EnsureUrinalSpriteHolder();
             for (int index = 0; index < UrinalCount; index++)
             {
                 string urinalName = $"Urinal{index + 1:00}";
@@ -493,11 +502,33 @@ namespace Nyoice.Editor
                     exitStartPoint,
                     highlight,
                     visualRenderer != null ? visualRenderer : body.GetComponent<Renderer>());
+                SpriteRenderer spriteRenderer = urinal
+                    .Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
+                controller.ConfigureSpriteHolder(spriteHolder, spriteRenderer);
+                ConfigureUrinalHighlightLayout(
+                    urinal,
+                    body,
+                    highlight.transform,
+                    NyoicePixelArtSetup.UsePixelVisuals);
                 EditorUtility.SetDirty(controller);
                 controllers[index] = controller;
             }
 
             return controllers;
+        }
+
+        private static UrinalSpriteHolder EnsureUrinalSpriteHolder()
+        {
+            UrinalSpriteHolder holder =
+                AssetDatabase.LoadAssetAtPath<UrinalSpriteHolder>(UrinalSpriteHolderPath);
+            if (holder != null)
+            {
+                return holder;
+            }
+
+            holder = ScriptableObject.CreateInstance<UrinalSpriteHolder>();
+            AssetDatabase.CreateAsset(holder, UrinalSpriteHolderPath);
+            return holder;
         }
 
         private static GameObject EnsureHighlight(Transform urinal, Transform body)
@@ -524,7 +555,7 @@ namespace Nyoice.Editor
             Transform highlight,
             bool usePixelVisual)
         {
-            const float pixelFrameScale = 1.1f;
+            const float pixelFrameScale = 1.055f;
             Vector3 center = body.localPosition;
             Quaternion rotation = body.localRotation;
             float frontZ = body.localPosition.z - ((body.localScale.z * 0.5f) + 0.08f);
@@ -532,13 +563,15 @@ namespace Nyoice.Editor
             float outerHeight = body.localScale.y + 0.3f;
 
             SpriteRenderer pixelRenderer = urinal.Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
-            if (usePixelVisual && pixelRenderer != null && pixelRenderer.sprite != null)
+            if (pixelRenderer != null && pixelRenderer.sprite != null)
             {
+                const float pixelHighlightYOffset = -0.065f;
                 Vector2 spriteSize = pixelRenderer.sprite.bounds.size;
                 Vector3 pixelScale = pixelRenderer.transform.localScale;
                 outerWidth = spriteSize.x * Mathf.Abs(pixelScale.x) * pixelFrameScale;
                 outerHeight = spriteSize.y * Mathf.Abs(pixelScale.y) * pixelFrameScale;
                 center = pixelRenderer.transform.localPosition;
+                center.y += pixelHighlightYOffset;
                 rotation = pixelRenderer.transform.localRotation;
                 frontZ = center.z - 0.08f;
             }
@@ -636,6 +669,20 @@ namespace Nyoice.Editor
             ScoreManager scoreManager = GetOrCreateChildComponent<ScoreManager>(
                 gameSystems.transform,
                 "ScoreManager");
+            AudioManager audioManager = GetOrCreateChildComponent<AudioManager>(
+                gameSystems.transform,
+                "AudioManager");
+
+            AudioSource seSource = audioManager.GetComponent<AudioSource>();
+            if (seSource == null)
+            {
+                seSource = audioManager.gameObject.AddComponent<AudioSource>();
+            }
+
+            seSource.playOnAwake = false;
+            seSource.loop = false;
+            seSource.spatialBlend = 0f;
+            audioManager.Configure(seSource, EnsureAudioClipHolder());
 
             AudioSource audioSource = urinalManager.GetComponent<AudioSource>();
             if (audioSource == null)
@@ -670,7 +717,27 @@ namespace Nyoice.Editor
             EditorUtility.SetDirty(gameStateManager);
             EditorUtility.SetDirty(discomfortManager);
             EditorUtility.SetDirty(scoreManager);
+            EditorUtility.SetDirty(audioManager);
+            EditorUtility.SetDirty(seSource);
             EditorUtility.SetDirty(audioSource);
+        }
+
+        private static AudioClipHolder EnsureAudioClipHolder()
+        {
+            if (!AssetDatabase.IsValidFolder(AudioDirectory))
+            {
+                AssetDatabase.CreateFolder("Assets/_Project", "Audio");
+            }
+
+            AudioClipHolder holder = AssetDatabase.LoadAssetAtPath<AudioClipHolder>(AudioClipHolderPath);
+            if (holder == null)
+            {
+                holder = ScriptableObject.CreateInstance<AudioClipHolder>();
+                AssetDatabase.CreateAsset(holder, AudioClipHolderPath);
+            }
+
+            EditorUtility.SetDirty(holder);
+            return holder;
         }
 
         private static void EnsureScoreUI(ScoreManager scoreManager)
@@ -687,27 +754,76 @@ namespace Nyoice.Editor
                 return;
             }
 
+            Transform container = canvasTransform.Find("HUDRoot/HUDContainer");
+            if (container == null)
+            {
+                return;
+            }
+
+            Transform statsPanel = container.Find("StatsPanel");
+            Transform scoreGroup = statsPanel.Find("Score");
+            Transform processedGroup = statsPanel.Find("ProcessedCount");
+            Transform comboPanel = container.Find("ComboPanel");
+            Text scoreLabel = EnsureUiText(
+                scoreGroup,
+                "ScoreLabel",
+                new Vector2(0.08f, 0.55f),
+                new Vector2(0.92f, 0.9f),
+                26,
+                TextAnchor.MiddleCenter);
             Text scoreText = EnsureUiText(
-                canvasTransform,
+                scoreGroup,
                 "ScoreText",
-                new Vector2(0.02f, 0.90f),
-                new Vector2(0.25f, 0.99f),
-                36,
-                TextAnchor.MiddleLeft);
+                new Vector2(0.08f, 0.08f),
+                new Vector2(0.92f, 0.58f),
+                38,
+                TextAnchor.MiddleCenter);
+            Text processedLabel = EnsureUiText(
+                processedGroup,
+                "ProcessedCountLabel",
+                new Vector2(0.05f, 0.55f),
+                new Vector2(0.95f, 0.9f),
+                26,
+                TextAnchor.MiddleCenter);
+            Text processedCountText = EnsureUiText(
+                processedGroup,
+                "ProcessedCountText",
+                new Vector2(0.05f, 0.08f),
+                new Vector2(0.95f, 0.58f),
+                38,
+                TextAnchor.MiddleCenter);
+            Text comboLabel = EnsureUiText(
+                comboPanel,
+                "ComboLabel",
+                new Vector2(0.08f, 0.55f),
+                new Vector2(0.92f, 0.9f),
+                24,
+                TextAnchor.MiddleCenter);
             Text comboText = EnsureUiText(
-                canvasTransform,
+                comboPanel,
                 "ComboText",
-                new Vector2(0.75f, 0.90f),
-                new Vector2(0.98f, 0.99f),
-                36,
-                TextAnchor.MiddleRight);
+                new Vector2(0.08f, 0.08f),
+                new Vector2(0.92f, 0.58f),
+                35,
+                TextAnchor.MiddleCenter);
+            scoreLabel.text = "SCORE";
+            processedLabel.text = "\u51e6\u7406\u4eba\u6570";
+            comboLabel.text = "COMBO";
+            EnsureTextOutline(scoreLabel);
             EnsureTextOutline(scoreText);
+            EnsureTextOutline(processedLabel);
+            EnsureTextOutline(processedCountText);
+            EnsureTextOutline(comboLabel);
             EnsureTextOutline(comboText);
 
             ScoreUI scoreUI = GetOrAddComponent<ScoreUI>(canvasTransform.gameObject);
-            scoreUI.Configure(scoreManager, scoreText, comboText);
+            scoreUI.Configure(scoreManager, scoreText, comboText, processedCountText, true);
             EditorUtility.SetDirty(scoreUI);
+            EditorUtility.SetDirty(scoreLabel);
             EditorUtility.SetDirty(scoreText);
+            EditorUtility.SetDirty(processedLabel);
+            EditorUtility.SetDirty(processedCountText);
+            EditorUtility.SetDirty(comboLabel);
             EditorUtility.SetDirty(comboText);
         }
 
@@ -745,20 +861,66 @@ namespace Nyoice.Editor
             CanvasScaler scaler = GetOrAddComponent<CanvasScaler>(canvasObject);
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920f, 1080f);
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
             GetOrAddComponent<GraphicRaycaster>(canvasObject);
 
+            RemoveDirectUiObject(canvasObject.transform, "HudPanel");
+            RemoveDirectUiObject(canvasObject.transform, "DiscomfortText");
+            RemoveDirectUiObject(canvasObject.transform, "ScoreText");
+            RemoveDirectUiObject(canvasObject.transform, "ProcessedCountText");
+            RemoveDirectUiObject(canvasObject.transform, "ComboText");
+            Transform hudRoot = GetOrCreateUiObject(canvasObject.transform, "HUDRoot").transform;
+            SetTopStretchRect(hudRoot.GetComponent<RectTransform>(), 10f, 118f);
+            Transform hudContainer = GetOrCreateUiObject(hudRoot, "HUDContainer").transform;
+            SetFixedRect(
+                hudContainer.GetComponent<RectTransform>(),
+                new Vector2(0.5f, 1f),
+                new Vector2(1220f, 118f),
+                Vector2.zero,
+                new Vector2(0.5f, 1f));
+
+            Transform discomfortPanel = EnsureHudPanel(
+                hudContainer,
+                "DiscomfortPanel",
+                0f,
+                580f,
+                118f);
+            Transform statsPanel = EnsureHudPanel(
+                hudContainer,
+                "StatsPanel",
+                604f,
+                420f,
+                118f);
+            Transform comboPanel = EnsureHudPanel(
+                hudContainer,
+                "ComboPanel",
+                1048f,
+                172f,
+                118f);
+            EnsureStatsPanelStructure(statsPanel);
+
+            Text discomfortLabel = EnsureUiText(
+                discomfortPanel,
+                "DiscomfortLabel",
+                new Vector2(0.04f, 0.58f),
+                new Vector2(0.32f, 0.92f),
+                26,
+                TextAnchor.MiddleLeft);
+            discomfortLabel.text = "\u4e0d\u5feb\u5ea6";
             Text discomfortText = EnsureUiText(
-                canvasObject.transform,
+                discomfortPanel,
                 "DiscomfortText",
-                new Vector2(0.2f, 0.90f),
-                new Vector2(0.8f, 0.99f),
-                40,
-                TextAnchor.MiddleCenter);
-            discomfortText.text = "DISCOMFORT 0 / 100";
+                new Vector2(0.68f, 0.58f),
+                new Vector2(0.96f, 0.92f),
+                32,
+                TextAnchor.MiddleRight);
+            discomfortText.text = "0 / 100";
+            EnsureTextOutline(discomfortLabel);
             EnsureTextOutline(discomfortText);
 
-            Slider discomfortSlider = EnsureDiscomfortSlider(canvasObject.transform);
+            Image[] blockFills = EnsureDiscomfortBlockGauge(discomfortPanel);
+            Slider discomfortSlider = EnsureLegacyDiscomfortSlider(canvasObject.transform, hudRoot);
             Text gameOverText = EnsureUiText(
                 canvasObject.transform,
                 "GameOverText",
@@ -778,25 +940,38 @@ namespace Nyoice.Editor
                 gameStateManager,
                 discomfortText,
                 discomfortSlider,
-                gameOverText);
+                gameOverText,
+                blockFills,
+                true);
 
             EditorUtility.SetDirty(canvasObject);
             EditorUtility.SetDirty(ui);
+            EditorUtility.SetDirty(discomfortLabel);
             EditorUtility.SetDirty(discomfortText);
             EditorUtility.SetDirty(discomfortSlider);
             EditorUtility.SetDirty(gameOverText);
+
+            EnsureLowerInfoRoot(canvasObject.transform);
+            gameOverText.transform.SetAsLastSibling();
         }
 
-        private static Slider EnsureDiscomfortSlider(Transform parent)
+        private static Slider EnsureLegacyDiscomfortSlider(Transform canvas, Transform hudRoot)
         {
-            GameObject sliderObject = GetOrCreateUiObject(parent, "DiscomfortSlider");
-            SetUiAnchors(
-                sliderObject.GetComponent<RectTransform>(),
-                new Vector2(0.25f, 0.86f),
-                new Vector2(0.75f, 0.90f));
+            Transform existing = hudRoot.Find("LegacyDiscomfortSlider");
+            if (existing == null)
+            {
+                existing = canvas.Find("DiscomfortSlider");
+            }
+
+            GameObject sliderObject = existing != null
+                ? existing.gameObject
+                : GetOrCreateUiObject(hudRoot, "LegacyDiscomfortSlider");
+            sliderObject.name = "LegacyDiscomfortSlider";
+            sliderObject.transform.SetParent(hudRoot, false);
 
             Image background = GetOrAddComponent<Image>(sliderObject);
             background.color = new Color(0.12f, 0.14f, 0.18f, 0.95f);
+            background.raycastTarget = false;
 
             Transform fillTransform = sliderObject.transform.Find("Fill");
             GameObject fillObject = fillTransform != null
@@ -806,6 +981,7 @@ namespace Nyoice.Editor
             SetUiAnchors(fillRect, Vector2.zero, Vector2.one);
             Image fillImage = GetOrAddComponent<Image>(fillObject);
             fillImage.color = new Color(1f, 0.65f, 0.12f);
+            fillImage.raycastTarget = false;
 
             Slider slider = GetOrAddComponent<Slider>(sliderObject);
             slider.minValue = 0f;
@@ -817,7 +993,221 @@ namespace Nyoice.Editor
             slider.handleRect = null;
             slider.targetGraphic = background;
             slider.interactable = false;
+            sliderObject.SetActive(false);
             return slider;
+        }
+
+        private static Transform EnsureHudPanel(
+            Transform parent,
+            string objectName,
+            float left,
+            float width,
+            float height)
+        {
+            Transform panel = GetOrCreateUiObject(parent, objectName).transform;
+            SetFixedRect(
+                panel.GetComponent<RectTransform>(),
+                Vector2.zero,
+                new Vector2(width, height),
+                new Vector2(left, 0f),
+                Vector2.zero);
+            Image background = GetOrAddComponent<Image>(panel.gameObject);
+            background.color = new Color(0.04f, 0.06f, 0.08f, 0.86f);
+            background.raycastTarget = false;
+            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            background.type = Image.Type.Sliced;
+            return panel;
+        }
+
+        private static void EnsureStatsPanelStructure(Transform statsPanel)
+        {
+            Transform score = GetOrCreateUiObject(statsPanel, "Score").transform;
+            SetUiAnchors(
+                score.GetComponent<RectTransform>(),
+                new Vector2(0f, 0f),
+                new Vector2(0.5f, 1f));
+            Transform processed = GetOrCreateUiObject(statsPanel, "ProcessedCount").transform;
+            SetUiAnchors(
+                processed.GetComponent<RectTransform>(),
+                new Vector2(0.5f, 0f),
+                new Vector2(1f, 1f));
+            GameObject divider = GetOrCreateUiObject(statsPanel, "Divider");
+            SetFixedRect(
+                divider.GetComponent<RectTransform>(),
+                new Vector2(0.5f, 0.5f),
+                new Vector2(2f, 82f),
+                Vector2.zero,
+                new Vector2(0.5f, 0.5f));
+            Image dividerImage = GetOrAddComponent<Image>(divider);
+            dividerImage.color = new Color(1f, 1f, 1f, 0.18f);
+            dividerImage.raycastTarget = false;
+        }
+
+        private static Image[] EnsureDiscomfortBlockGauge(Transform discomfortPanel)
+        {
+            Transform gauge = GetOrCreateUiObject(discomfortPanel, "BlockGauge").transform;
+            SetFixedRect(
+                gauge.GetComponent<RectTransform>(),
+                new Vector2(0f, 0f),
+                new Vector2(520f, 46f),
+                new Vector2(30f, 13f),
+                Vector2.zero);
+
+            Sprite uiSprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            var fills = new Image[10];
+            const float blockWidth = 45.7f;
+            const float gap = 7f;
+            for (int index = 0; index < fills.Length; index++)
+            {
+                Transform block = GetOrCreateUiObject(gauge, $"Block{index + 1:00}").transform;
+                SetFixedRect(
+                    block.GetComponent<RectTransform>(),
+                    new Vector2(0f, 0.5f),
+                    new Vector2(blockWidth, 46f),
+                    new Vector2(index * (blockWidth + gap), 0f),
+                    new Vector2(0f, 0.5f));
+                Image blockBackground = GetOrAddComponent<Image>(block.gameObject);
+                blockBackground.sprite = uiSprite;
+                blockBackground.type = Image.Type.Sliced;
+                blockBackground.color = new Color(0.16f, 0.18f, 0.2f, 0.95f);
+                blockBackground.raycastTarget = false;
+
+                GameObject fillObject = GetOrCreateUiObject(block, "Fill");
+                RectTransform fillRect = fillObject.GetComponent<RectTransform>();
+                SetUiAnchors(fillRect, Vector2.zero, Vector2.one);
+                fillRect.offsetMin = new Vector2(3f, 3f);
+                fillRect.offsetMax = new Vector2(-3f, -3f);
+                Image fill = GetOrAddComponent<Image>(fillObject);
+                fill.sprite = uiSprite;
+                fill.type = Image.Type.Filled;
+                fill.fillMethod = Image.FillMethod.Horizontal;
+                fill.fillOrigin = (int)Image.OriginHorizontal.Left;
+                fill.fillAmount = 0f;
+                fill.raycastTarget = false;
+                fills[index] = fill;
+            }
+
+            return fills;
+        }
+
+        private static void EnsureLowerInfoRoot(Transform canvas)
+        {
+            Transform lowerRoot = GetOrCreateUiObject(canvas, "LowerInfoRoot").transform;
+            SetFixedRect(
+                lowerRoot.GetComponent<RectTransform>(),
+                new Vector2(0.5f, 0f),
+                new Vector2(1220f, 140f),
+                new Vector2(0f, 20f),
+                new Vector2(0.5f, 0f));
+
+            Transform rulePanel = EnsureLowerInfoPanel(lowerRoot, "RulePanel", 0f, 380f);
+            Transform comboGuidePanel = EnsureLowerInfoPanel(lowerRoot, "ComboGuidePanel", 404f, 540f);
+            Transform stageInfoPanel = EnsureLowerInfoPanel(lowerRoot, "StageInfoPanel", 968f, 252f);
+
+            Text ruleText = EnsureUiText(
+                rulePanel,
+                "BodyText",
+                new Vector2(0.05f, 0.08f),
+                new Vector2(0.95f, 0.92f),
+                22,
+                TextAnchor.UpperLeft);
+            ruleText.text =
+                "RULE\n\u96a3\u306b\u4eba\u304c\u3044\u308b\u9593\u3001\u4e0d\u5feb\u5ea6\u304c\u5897\u52a0\n" +
+                "\u4e0d\u5feb\u5ea6 100 \u3067 GameOver";
+
+            Text comboGuideText = EnsureUiText(
+                comboGuidePanel,
+                "BodyText",
+                new Vector2(0.04f, 0.08f),
+                new Vector2(0.96f, 0.92f),
+                21,
+                TextAnchor.UpperLeft);
+            comboGuideText.text =
+                "5 COMBO   SCORE \u00d71.1\n" +
+                "10 COMBO  SCORE \u00d71.2\n" +
+                "20 COMBO  SCORE \u00d71.5\n" +
+                "30 COMBO  SCORE \u00d72.0\n" +
+                "50 COMBO  SCORE \u00d73.0";
+
+            Text stageInfoText = EnsureUiText(
+                stageInfoPanel,
+                "BodyText",
+                new Vector2(0.06f, 0.08f),
+                new Vector2(0.94f, 0.92f),
+                20,
+                TextAnchor.UpperLeft);
+            stageInfoText.text =
+                "STAGE INFO\nLEVEL --\nSPAWN 1.0 - 5.0s\nPEE 2.0 - 10.0s";
+
+            EditorUtility.SetDirty(lowerRoot);
+            EditorUtility.SetDirty(ruleText);
+            EditorUtility.SetDirty(comboGuideText);
+            EditorUtility.SetDirty(stageInfoText);
+        }
+
+        private static Transform EnsureLowerInfoPanel(
+            Transform parent,
+            string objectName,
+            float left,
+            float width)
+        {
+            Transform panel = GetOrCreateUiObject(parent, objectName).transform;
+            SetFixedRect(
+                panel.GetComponent<RectTransform>(),
+                Vector2.zero,
+                new Vector2(width, 140f),
+                new Vector2(left, 0f),
+                Vector2.zero);
+            Image background = GetOrAddComponent<Image>(panel.gameObject);
+            background.color = new Color(0.035f, 0.05f, 0.065f, 0.68f);
+            background.raycastTarget = false;
+            background.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/UISprite.psd");
+            background.type = Image.Type.Sliced;
+            return panel;
+        }
+
+        private static void SetTopStretchRect(RectTransform rect, float topInset, float height)
+        {
+            rect.anchorMin = new Vector2(0f, 1f);
+            rect.anchorMax = new Vector2(1f, 1f);
+            rect.pivot = new Vector2(0.5f, 1f);
+            rect.anchoredPosition = new Vector2(0f, -topInset);
+            rect.sizeDelta = new Vector2(0f, height);
+            rect.localScale = Vector3.one;
+        }
+
+        private static void SetFixedRect(
+            RectTransform rect,
+            Vector2 anchor,
+            Vector2 size,
+            Vector2 position,
+            Vector2 pivot)
+        {
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = pivot;
+            rect.sizeDelta = size;
+            rect.anchoredPosition = position;
+            rect.localScale = Vector3.one;
+        }
+
+        private static void RemoveDirectUiObject(Transform parent, string objectName)
+        {
+            Transform child = null;
+            for (int index = 0; index < parent.childCount; index++)
+            {
+                Transform candidate = parent.GetChild(index);
+                if (candidate.name == objectName)
+                {
+                    child = candidate;
+                    break;
+                }
+            }
+
+            if (child != null)
+            {
+                Object.DestroyImmediate(child.gameObject);
+            }
         }
 
         private static Text EnsureUiText(
@@ -957,7 +1347,42 @@ namespace Nyoice.Editor
 
             NyoicePixelArtSetup.EnsureNpcVisuals(npcRoot);
 
+            NPCBusinessSpriteHolder spriteHolder = EnsureBusinessSpriteHolder();
+            SpriteRenderer spriteRenderer = npcRoot.transform
+                .Find("VisualRoot/PixelVisual")?.GetComponent<SpriteRenderer>();
+            npcController.ConfigureSpriteHolder(spriteHolder, spriteRenderer);
+            EditorUtility.SetDirty(npcController);
+
             EnsureUrinationGauge(npcRoot, npcController);
+        }
+
+        private static NPCBusinessSpriteHolder EnsureBusinessSpriteHolder()
+        {
+            EnsureAssetFolder("Assets/_Project/Art/Pixel/NPC");
+            EnsureAssetFolder(BusinessSpriteDirectory);
+
+            NPCBusinessSpriteHolder holder =
+                AssetDatabase.LoadAssetAtPath<NPCBusinessSpriteHolder>(BusinessSpriteHolderPath);
+            if (holder != null)
+            {
+                return holder;
+            }
+
+            holder = ScriptableObject.CreateInstance<NPCBusinessSpriteHolder>();
+            AssetDatabase.CreateAsset(holder, BusinessSpriteHolderPath);
+            return holder;
+        }
+
+        private static void EnsureAssetFolder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path))
+            {
+                return;
+            }
+
+            string parent = Path.GetDirectoryName(path)?.Replace('\\', '/');
+            string name = Path.GetFileName(path);
+            AssetDatabase.CreateFolder(parent, name);
         }
 
         private static void EnsureUrinationGauge(GameObject npcRoot, NPCController npcController)
@@ -1101,6 +1526,103 @@ namespace Nyoice.Editor
             cube.transform.localScale = scale;
             SetRendererColor(cube.GetComponent<Renderer>(), color);
             return cube;
+        }
+
+        private static void EnsureStageVisualVisibility(Transform gameStage)
+        {
+            SetRenderersEnabled(gameStage.Find("PixelEnvironmentTest"), false);
+            SetRenderersEnabled(gameStage.Find("Entrance/EntranceMarker"), true);
+            SetRenderersEnabled(gameStage.Find("Entrance/SpawnPoint"), false);
+            SetRenderersEnabled(gameStage.Find("Queue"), false);
+            SetRenderersEnabled(gameStage.Find("NyoiceLine/Line"), false);
+            SetRenderersEnabled(gameStage.Find("NyoiceLine/WallVisualRoot"), true);
+            SetRenderersEnabled(gameStage.Find("NyoiceLine/CrossingTarget"), false);
+            SetRenderersEnabled(gameStage.Find("Exit/ExitMarker"), true);
+            SetRenderersEnabled(gameStage.Find("Exit/ExitPoint"), false);
+            SetRenderersEnabled(gameStage.Find("Waypoints"), false);
+        }
+
+        private static void EnsureNyoiceLineWallVisual(Transform lineRoot, Transform runtimeLine)
+        {
+            Transform legacyVisual = lineRoot.Find("WallVisual");
+            if (legacyVisual != null)
+            {
+                Object.DestroyImmediate(legacyVisual.gameObject);
+            }
+
+            MeshFilter sourceFilter = runtimeLine.GetComponent<MeshFilter>();
+            MeshRenderer sourceRenderer = runtimeLine.GetComponent<MeshRenderer>();
+            Transform visualRoot = lineRoot.Find("WallVisualRoot");
+            if (visualRoot == null)
+            {
+                visualRoot = new GameObject("WallVisualRoot").transform;
+                visualRoot.SetParent(lineRoot, false);
+            }
+
+            visualRoot.localPosition = Vector3.zero;
+            visualRoot.localRotation = Quaternion.identity;
+            visualRoot.localScale = Vector3.one;
+            EnsureWallVisualSegment(visualRoot, "Wall", WallVisualBottomY, UrinalY,
+                sourceFilter, sourceRenderer);
+            RemoveDirectChild(visualRoot, "WallUpper");
+            RemoveDirectChild(visualRoot, "WallLower");
+
+            sourceRenderer.enabled = false;
+            EditorUtility.SetDirty(sourceRenderer);
+            EditorUtility.SetDirty(visualRoot);
+        }
+
+        private static void EnsureWallVisualSegment(
+            Transform root,
+            string segmentName,
+            float bottom,
+            float top,
+            MeshFilter sourceFilter,
+            MeshRenderer sourceRenderer)
+        {
+            Transform segment = root.Find(segmentName);
+            if (segment == null)
+            {
+                segment = new GameObject(segmentName, typeof(MeshFilter), typeof(MeshRenderer)).transform;
+                segment.SetParent(root, false);
+            }
+
+            MeshFilter filter = segment.GetComponent<MeshFilter>();
+            MeshRenderer renderer = segment.GetComponent<MeshRenderer>();
+            filter.sharedMesh = sourceFilter.sharedMesh;
+            renderer.sharedMaterial = sourceRenderer.sharedMaterial;
+            renderer.sortingOrder = sourceRenderer.sortingOrder;
+            renderer.enabled = true;
+
+            float height = top - bottom;
+            segment.position = new Vector3(NyoiceLineX, bottom + (height * 0.5f), 0f);
+            segment.rotation = Quaternion.identity;
+            segment.localScale = new Vector3(0.08f, height, 0.08f);
+            EditorUtility.SetDirty(renderer);
+            EditorUtility.SetDirty(segment);
+        }
+
+        private static void RemoveDirectChild(Transform parent, string childName)
+        {
+            Transform child = parent.Find(childName);
+            if (child != null)
+            {
+                Object.DestroyImmediate(child.gameObject);
+            }
+        }
+
+        private static void SetRenderersEnabled(Transform root, bool enabled)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                renderer.enabled = enabled;
+                EditorUtility.SetDirty(renderer);
+            }
         }
 
         private static void MigrateSetupRendererMaterials(Transform root)

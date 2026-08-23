@@ -29,6 +29,12 @@ namespace Nyoice.Toilet
         [SerializeField]
         private Renderer bodyRenderer;
 
+        [SerializeField]
+        private UrinalSpriteHolder spriteHolder;
+
+        [SerializeField]
+        private SpriteRenderer spriteRenderer;
+
         private Color _availableColor = Color.white;
 
         public int UrinalNumber => urinalNumber;
@@ -43,6 +49,7 @@ namespace Nyoice.Toilet
         public bool IsSelected => highlight != null && highlight.activeSelf;
         public GameObject Highlight => highlight;
         public Renderer BodyRenderer => bodyRenderer;
+        public UrinalSpriteHolder SpriteHolder => spriteHolder;
 
         public void Configure(
             int number,
@@ -85,6 +92,33 @@ namespace Nyoice.Toilet
             ApplyPresentation();
         }
 
+        public void ConfigureSpriteHolder(
+            UrinalSpriteHolder holder,
+            SpriteRenderer targetRenderer)
+        {
+            spriteHolder = holder;
+            spriteRenderer = targetRenderer;
+            SetNormal();
+        }
+
+        public void SetNormal()
+        {
+            SetSprite(spriteHolder != null ? spriteHolder.UrinalNormal : null);
+        }
+
+        public void SetSelected()
+        {
+            SetSprite(spriteHolder != null ? spriteHolder.UrinalSelected : null);
+        }
+
+        private void SetSprite(Sprite sprite)
+        {
+            if (spriteRenderer != null && sprite != null)
+            {
+                spriteRenderer.sprite = sprite;
+            }
+        }
+
         public bool Reserve(NPCController npc)
         {
             if (!IsAvailable || npc == null)
@@ -125,9 +159,19 @@ namespace Nyoice.Toilet
 
         public void SetSelected(bool selected)
         {
+            bool showSelected = selected && !IsOccupied;
             if (highlight != null)
             {
-                highlight.SetActive(selected && !IsOccupied);
+                highlight.SetActive(showSelected);
+            }
+
+            if (showSelected)
+            {
+                SetSelected();
+            }
+            else
+            {
+                SetNormal();
             }
         }
 

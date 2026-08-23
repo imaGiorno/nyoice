@@ -9,6 +9,7 @@ namespace Nyoice.Managers
     public sealed class QueueManager : MonoBehaviour
     {
         private const int MaxVisibleNpcCount = 8;
+        public const float DefaultCrossingMinimumCenterSpacing = 2f;
 
         [SerializeField]
         private QueueSlot[] queueSlots;
@@ -40,11 +41,15 @@ namespace Nyoice.Managers
         [SerializeField]
         private bool enableQueueDebugLogs = true;
 
+        [SerializeField, Min(0.8f)]
+        private float crossingMinimumCenterSpacing = DefaultCrossingMinimumCenterSpacing;
+
         private readonly List<NPCController> _internalWaitingList = new List<NPCController>();
         private readonly List<NPCController> _pendingNpcs = new List<NPCController>();
         private NPCController _decisionPointOccupant;
         private NPCController _selectionZoneOccupant;
         private NPCController _approachRouteOccupant;
+        private NPCController _crossingCorridorOccupant;
         private bool _hasLoggedInitializationError;
         private bool _ticketEventSubscribed;
         private bool _gameOverLogged;
@@ -53,6 +58,8 @@ namespace Nyoice.Managers
         public IReadOnlyList<NPCController> PendingNpcs => _pendingNpcs;
         public NPCController SelectionZoneOccupant => _selectionZoneOccupant;
         public NPCController ApproachRouteOccupant => _approachRouteOccupant;
+        public NPCController CrossingCorridorOccupant => _crossingCorridorOccupant;
+        public float CrossingMinimumCenterSpacing => crossingMinimumCenterSpacing;
         public bool IsSelectionZoneOccupied => _selectionZoneOccupant != null;
         public int VisibleNpcCount => GetVisibleNpcCount();
         public bool IsProgressionBlocked => gameStateManager != null && gameStateManager.IsGameOver;
@@ -241,15 +248,66 @@ namespace Nyoice.Managers
             return true;
         }
 
-        public void NotifyApproachPointReached(NPCController npc)
+        public bool NotifyApproachPointReached(NPCController npc)
         {
             if (npc == null || _approachRouteOccupant != npc)
+            {
+                return false;
+            }
+
+            if (_crossingCorridorOccupant != null)
+            {
+                LogQueueEvent($"{npc.name} is waiting at ApproachPoint for Crossing Corridor spacing");
+                return true;
+            }
+
+            AdmitApproachOccupantToCrossingCorridor(npc);
+            return true;
+        }
+
+        public void NotifyCrossingCorridorProgress(NPCController npc)
+        {
+            if (npc == null || _crossingCorridorOccupant != npc || lineCrossingTarget == null)
             {
                 return;
             }
 
+            float minimumSpacing = Mathf.Max(0.8f, crossingMinimumCenterSpacing);
+            if (Vector3.Distance(npc.transform.position, lineCrossingTarget.position) + 0.0001f < minimumSpacing)
+            {
+                return;
+            }
+
+            _crossingCorridorOccupant = null;
+            LogQueueEvent($"{npc.name} cleared Crossing Corridor with {minimumSpacing:0.00} spacing");
+
+            if (_approachRouteOccupant != null && nyoiceApproachPoint != null &&
+                Vector3.Distance(_approachRouteOccupant.transform.position, nyoiceApproachPoint.position) <= 0.02f)
+            {
+                AdmitApproachOccupantToCrossingCorridor(_approachRouteOccupant);
+                return;
+            }
+
+            CompactQueue();
+        }
+
+        public void ReleaseCrossingCorridor(NPCController npc)
+        {
+            if (npc == null || _crossingCorridorOccupant != npc)
+            {
+                return;
+            }
+
+            _crossingCorridorOccupant = null;
+            CompactQueue();
+        }
+
+        private void AdmitApproachOccupantToCrossingCorridor(NPCController npc)
+        {
+            _crossingCorridorOccupant = npc;
             _approachRouteOccupant = null;
-            LogQueueEvent($"{npc.name} cleared the shared approach route");
+            LogQueueEvent($"{npc.name} entered Crossing Corridor");
+            npc.BeginCrossingCorridor();
             CompactQueue();
         }
 
