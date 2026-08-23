@@ -99,7 +99,6 @@ namespace Nyoice.Editor
         {
             var gameStage = new GameObject("GameStage");
             Transform urinals = CreateGroup("Urinals", gameStage.transform);
-            Transform partitions = CreateGroup("Partitions", gameStage.transform);
             Transform entrance = CreateGroup("Entrance", gameStage.transform);
             Transform queue = CreateGroup("Queue", gameStage.transform);
             Transform nyoiceLine = CreateGroup("NyoiceLine", gameStage.transform);
@@ -107,7 +106,6 @@ namespace Nyoice.Editor
             Transform waypoints = CreateGroup("Waypoints", gameStage.transform);
 
             CreateUrinals(urinals);
-            CreatePartitions(partitions);
             CreateEntrance(entrance);
             CreateQueue(queue);
             CreateNyoiceLine(nyoiceLine);
@@ -120,7 +118,6 @@ namespace Nyoice.Editor
         {
             NyoicePixelArtSetup.EnsureEnvironmentVisual(gameStage);
             Transform urinalRoot = GetOrCreateGroup("Urinals", gameStage);
-            Transform partitionRoot = GetOrCreateGroup("Partitions", gameStage);
             Transform entranceRoot = GetOrCreateGroup("Entrance", gameStage);
             Transform queueRoot = GetOrCreateGroup("Queue", gameStage);
             Transform lineRoot = GetOrCreateGroup("NyoiceLine", gameStage);
@@ -128,7 +125,6 @@ namespace Nyoice.Editor
             Transform waypointRoot = GetOrCreateGroup("Waypoints", gameStage);
 
             EnsureQueueLayout(queueRoot);
-            EnsurePartitionLayout(partitionRoot);
             RemoveBackgroundProps(gameStage);
             Transform spawnPoint = EnsureEntranceLayout(entranceRoot);
             Transform crossingTarget = EnsureNyoiceLine(lineRoot);
@@ -205,44 +201,6 @@ namespace Nyoice.Editor
             renderer.sharedMaterial = text.font.material;
             renderer.sortingOrder = 1;
             EditorUtility.SetDirty(text);
-        }
-
-        private static void CreatePartitions(Transform parent)
-        {
-            for (int index = 0; index < UrinalCount; index++)
-            {
-                float x = GetUrinalX(index) + (UrinalSpacing * 0.5f);
-                CreateCube(
-                    $"Partition{index + 1:00}",
-                    parent,
-                    new Vector3(x, UrinalY, 0f),
-                    new Vector3(0.12f, 1.8f, 0.8f),
-                    new Color(0.35f, 0.42f, 0.48f));
-            }
-        }
-
-        private static void EnsurePartitionLayout(Transform parent)
-        {
-            for (int index = 0; index < UrinalCount; index++)
-            {
-                string partitionName = $"Partition{index + 1:00}";
-                Transform partition = parent.Find(partitionName);
-                if (partition == null)
-                {
-                    partition = CreateCube(
-                        partitionName,
-                        parent,
-                        Vector3.zero,
-                        new Vector3(0.12f, 1.8f, 0.8f),
-                        new Color(0.35f, 0.42f, 0.48f)).transform;
-                }
-
-                partition.position = new Vector3(
-                    GetUrinalX(index) + (UrinalSpacing * 0.5f),
-                    UrinalY,
-                    0f);
-                EditorUtility.SetDirty(partition);
-            }
         }
 
         private static void RemoveBackgroundProps(Transform gameStage)
@@ -1582,7 +1540,6 @@ namespace Nyoice.Editor
             SetRenderersEnabled(gameStage.Find("Exit/ExitMarker"), true);
             SetRenderersEnabled(gameStage.Find("Exit/ExitPoint"), false);
             SetRenderersEnabled(gameStage.Find("Waypoints"), false);
-            SetRenderersEnabled(gameStage.Find("Partitions"), true);
         }
 
         private static void EnsureNyoiceLineWallVisual(Transform lineRoot, Transform runtimeLine)

@@ -142,7 +142,6 @@ namespace Nyoice.Editor
             Renderer runtimeLineRenderer = stage.Find("NyoiceLine/Line")?.GetComponent<Renderer>();
             Require(runtimeLineRenderer != null && !runtimeLineRenderer.enabled,
                 "Runtime line Renderer must remain hidden behind WallVisual.");
-            RequireRendererState(stage, "Partitions", true);
             Require(stage.Find("Entrance/SpawnPoint") != null && stage.Find("Queue/DecisionPoint") != null &&
                     stage.Find("Queue/NyoiceApproachPoint") != null && stage.Find("NyoiceLine/CrossingTarget") != null &&
                     stage.Find("Exit/ExitPoint") != null,
